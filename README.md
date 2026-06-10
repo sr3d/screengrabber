@@ -38,6 +38,14 @@ ad-hoc signs it (so the Screen Recording permission sticks across rebuilds).
   - **Arrow / Rect / Circle** — annotate
   - **Blur** — pixelate a region (obscure tokens, emails, faces)
   - **Box** — solid black redaction bar
+  - **Text** — click a point and type; **Return** adds a new line, **Esc** or **⌘Return** finishes
+- After you draw a shape, the editor drops into **Select** mode automatically so you can adjust it right away.
+- **Select** mode — adjust existing shapes:
+  - Click a shape to select it; drag its **body to move**, drag a **handle to resize**
+    (arrows have two endpoint handles; boxes/circles have eight edge & corner handles).
+  - Change the color or stroke width while a shape is selected to restyle it.
+  - **Double-click** a text box to re-edit it.
+  - **Delete/Backspace** removes the selected shape.
 - **Undo** (⌘Z), **Clear**, **Save…** (⌘S, writes PNG), **Copy** (⌘C, to clipboard).
 - Paste into Slack with ⌘V.
 

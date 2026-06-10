@@ -41,10 +41,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private func buildContent(toolbarHeight: CGFloat) {
         let content = NSView()
 
-        let tools = NSSegmentedControl(labels: ["→ Arrow", "▢ Rect", "◯ Circle", "▦ Blur", "■ Box"],
+        let tools = NSSegmentedControl(labels: ["⌖ Select", "→ Arrow", "▢ Rect", "◯ Circle", "▦ Blur", "■ Box", "T Text"],
                                        trackingMode: .selectOne,
                                        target: self, action: #selector(toolChanged(_:)))
-        tools.selectedSegment = 0
+        tools.selectedSegment = 1  // start on Arrow so the first drag draws
+
+        // After drawing a shape, auto-switch to Select mode to adjust it.
+        canvas.onDrawFinished = { [weak self, weak tools] in
+            tools?.selectedSegment = 0
+            self?.canvas.selectMode = true
+        }
 
         colorWell.color = .systemRed
         colorWell.target = self
@@ -89,6 +95,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         ])
 
         window?.contentView = content
+        window?.makeFirstResponder(canvas)
     }
 
     private func makeButton(_ title: String, action: Selector, key: String) -> NSButton {
@@ -104,15 +111,23 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Actions
 
     @objc private func toolChanged(_ sender: NSSegmentedControl) {
-        canvas.currentTool = Tool(rawValue: sender.selectedSegment) ?? .arrow
+        // Segment 0 is Select mode; the rest map to draw tools (offset by one).
+        if sender.selectedSegment == 0 {
+            canvas.selectMode = true
+        } else {
+            canvas.selectMode = false
+            canvas.currentTool = Tool(rawValue: sender.selectedSegment - 1) ?? .arrow
+        }
     }
 
     @objc private func colorChanged(_ sender: NSColorWell) {
         canvas.currentColor = sender.color
+        canvas.setSelectedColor(sender.color)   // retarget the selected shape too
     }
 
     @objc private func widthChanged(_ sender: NSSlider) {
         canvas.currentLineWidth = CGFloat(sender.doubleValue)
+        canvas.setSelectedLineWidth(CGFloat(sender.doubleValue))
     }
 
     @objc private func undo(_ sender: Any?) { canvas.undo() }
