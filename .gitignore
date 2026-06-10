@@ -1,0 +1,4 @@
+.build/
+ScreenGrabber.app/
+*.png
+.DS_Store
