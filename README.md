@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="Icon/AppIcon-1024.png" alt="ScreenGrabber icon" width="128" height="128">
+<img src="Icon/AppIcon-1024.png" alt="ScreenGrabber icon" width="200" height="200">
 
 # ScreenGrabber
 
-A fast, no-friction screenshot grabber + annotator for macOS.
+### A fast, no-friction screenshot grabber + annotator for macOS.
 
-[![CI](https://github.com/sr3d/macos-screengrabber/actions/workflows/ci.yml/badge.svg)](https://github.com/sr3d/macos-screengrabber/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/sr3d/macos-screengrabber)](https://github.com/sr3d/macos-screengrabber/releases/latest)
+[![CI](https://github.com/sr3d/screengrabber/actions/workflows/ci.yml/badge.svg)](https://github.com/sr3d/screengrabber/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/sr3d/screengrabber)](https://github.com/sr3d/screengrabber/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform: macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)
 
@@ -23,7 +23,7 @@ built-in ⇧⌘4.
 ## Download & Install
 
 1. **Download** the latest `ScreenGrabber-*.dmg` from the
-   [**Releases**](https://github.com/sr3d/macos-screengrabber/releases/latest) page.
+   [**Releases**](https://github.com/sr3d/screengrabber/releases/latest) page.
 2. **Open the `.dmg`** and drag **ScreenGrabber** into your **Applications** folder.
 3. **First launch — get past Gatekeeper.** ScreenGrabber is open-source but not
    signed with a paid Apple Developer ID, so macOS blocks it the first time.
@@ -45,6 +45,12 @@ Prefer to build it yourself? See [Development](#development). Curious how it wor
 inside? See the [**Developer docs**](docs/README.md).
 
 ## First-run setup
+
+<div align="center">
+
+<img src="docs/ScreenGrabber%20Menubar.png" alt="ScreenGrabber menu-bar dropdown" width="320">
+
+</div>
 
 1. **Launch** ScreenGrabber. A ✂️ scissors icon appears in the menu bar.
 2. **Grant Screen Recording.** The first capture triggers the macOS permission
@@ -89,6 +95,12 @@ slider. File actions (Undo / Clear / Save / Copy) sit on the right.
 ## Settings (⌘,)
 
 Open from the menu-bar icon ▸ *Settings…* (or **⌘,** in the editor):
+
+<div align="center">
+
+<img src="docs/ScreenGrabber%20Preferences.png" alt="ScreenGrabber Settings window" width="560">
+
+</div>
 
 - **Save location** — defaults to the macOS screenshot folder (Desktop unless you've
   changed it); choose any folder, or reset to default.

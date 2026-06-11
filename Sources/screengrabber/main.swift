@@ -1,7 +1,7 @@
 import AppKit
 import Carbon
 
-private let repoURL = "https://github.com/sr3d/macos-screengrabber"
+private let repoURL = "https://github.com/sr3d/screengrabber"
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!

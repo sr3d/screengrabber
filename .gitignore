@@ -6,3 +6,6 @@ dist/
 # Icon build artifacts — AppIcon.icns is committed; these are regenerated.
 Icon/AppIcon.iconset/
 !Icon/AppIcon-1024.png
+
+# Screenshots used in the README/docs are committed.
+!docs/*.png
