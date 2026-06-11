@@ -99,6 +99,8 @@ Open from the menu-bar icon ▸ *Settings…* (or **⌘,** in the editor):
     you can capture and ⌘V into Slack without opening the editor.
   - **Show the editor after a screenshot** (default **on**) — turn it off for a
     streamlined capture-only workflow (just save and/or copy, no editor window).
+- **Start ScreenGrabber at login** (default **off**) — registers the app as a macOS
+  login item so it's always in your menu bar after a restart.
 
 ## Development
 

@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 /// User settings, persisted in `UserDefaults`. Defaults mirror macOS's own
 /// screenshot behavior (Desktop location, "Screenshot …" filename).
@@ -34,6 +35,22 @@ final class Preferences {
     var showEditorOnCapture: Bool {
         get { defaults.object(forKey: Key.showEditor) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.showEditor) }
+    }
+
+    // MARK: - Start at login
+
+    /// Register the app as a macOS login item via SMAppService (macOS 13+). The
+    /// system is the source of truth, so this reads/writes its status directly.
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue { try SMAppService.mainApp.register() }
+                else { try SMAppService.mainApp.unregister() }
+            } catch {
+                NSLog("ScreenGrabber: failed to \(newValue ? "enable" : "disable") launch at login: \(error)")
+            }
+        }
     }
 
     // MARK: - Save location

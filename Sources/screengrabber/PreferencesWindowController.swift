@@ -10,7 +10,7 @@ final class PreferencesWindowController: NSWindowController {
     private let previewLabel = NSTextField(labelWithString: "")
 
     init() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 290),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 330),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "ScreenGrabber Settings"
         window.isReleasedWhenClosed = false
@@ -55,12 +55,18 @@ final class PreferencesWindowController: NSWindowController {
                                   target: self, action: #selector(showEditorToggled(_:)))
         showEditor.state = prefs.showEditorOnCapture ? .on : .off
 
+        // Startup.
+        let startAtLogin = NSButton(checkboxWithTitle: "Start ScreenGrabber at login",
+                                    target: self, action: #selector(startAtLoginToggled(_:)))
+        startAtLogin.state = prefs.launchAtLogin ? .on : .off
+
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Save to:"), locationRow],
             [NSTextField(labelWithString: "Filename:"), filenameRow],
             [NSTextField(labelWithString: "On capture:"), autoSave],
             [NSGridCell.emptyContentView, copyOnCapture],
             [NSGridCell.emptyContentView, showEditor],
+            [NSTextField(labelWithString: "Startup:"), startAtLogin],
         ])
         grid.rowSpacing = 16
         grid.columnSpacing = 12
@@ -122,5 +128,11 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func showEditorToggled(_ sender: NSButton) {
         prefs.showEditorOnCapture = (sender.state == .on)
+    }
+
+    @objc private func startAtLoginToggled(_ sender: NSButton) {
+        prefs.launchAtLogin = (sender.state == .on)
+        // Reflect the real status in case registration was rejected by the system.
+        sender.state = prefs.launchAtLogin ? .on : .off
     }
 }
