@@ -82,8 +82,9 @@ inside? See the [**Developer docs**](docs/README.md).
 | `3` | Line | | `7` | Box |
 | `4` | Rectangle | | `T` | Text |
 
-The **`Aa` dropdown** (next to the tools) sets text size. Color and stroke-width
-controls are at the right end of the toolbar.
+The drawing controls are grouped together on the left of the toolbar: the tool
+buttons, the **`Aa` dropdown** (text size), then the color well and stroke-width
+slider. File actions (Undo / Clear / Save / Copy) sit on the right.
 
 ## Settings (⌘,)
 

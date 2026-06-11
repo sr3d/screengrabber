@@ -100,8 +100,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let bar = NSStackView(views: [tools, sizeLabel, sizePopup,
-                                      spacer, undo, clear, save, copy, colorWell, widthSlider])
+        let bar = NSStackView(views: [tools, sizeLabel, sizePopup, colorWell, widthSlider,
+                                      spacer, undo, clear, save, copy])
         bar.orientation = .horizontal
         bar.spacing = 8
         bar.alignment = .centerY
