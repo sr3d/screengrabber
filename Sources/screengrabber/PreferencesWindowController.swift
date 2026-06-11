@@ -1,0 +1,108 @@
+import AppKit
+
+/// A small settings window for the save location, filename prefix, and the
+/// auto-save-on-capture toggle. Changes are written to `Preferences` live.
+final class PreferencesWindowController: NSWindowController {
+
+    private let prefs = Preferences.shared
+    private let pathLabel = NSTextField(labelWithString: "")
+    private let prefixField = NSTextField(string: "")
+    private let previewLabel = NSTextField(labelWithString: "")
+
+    init() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 220),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "ScreenGrabber Settings"
+        window.isReleasedWhenClosed = false
+        super.init(window: window)
+        buildContent()
+        refresh()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    private func buildContent() {
+        // Save location row.
+        pathLabel.lineBreakMode = .byTruncatingMiddle
+        pathLabel.font = .systemFont(ofSize: 11)
+        pathLabel.textColor = .secondaryLabelColor
+        let choose = NSButton(title: "Choose…", target: self, action: #selector(choose))
+        let useDefault = NSButton(title: "Use Default", target: self, action: #selector(useDefault))
+        let locationRow = NSStackView(views: [pathLabel, choose, useDefault])
+        locationRow.spacing = 8
+        pathLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        // Filename row.
+        prefixField.target = self
+        prefixField.action = #selector(prefixChanged)
+        prefixField.placeholderString = "Screenshot"
+        prefixField.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        previewLabel.font = .systemFont(ofSize: 11)
+        previewLabel.textColor = .secondaryLabelColor
+        let filenameRow = NSStackView(views: [prefixField, previewLabel])
+        filenameRow.spacing = 10
+
+        // Auto-save row.
+        let autoSave = NSButton(checkboxWithTitle: "Save a file automatically when a screenshot is taken",
+                                target: self, action: #selector(autoSaveToggled(_:)))
+        autoSave.state = prefs.autoSave ? .on : .off
+
+        let grid = NSGridView(views: [
+            [NSTextField(labelWithString: "Save to:"), locationRow],
+            [NSTextField(labelWithString: "Filename:"), filenameRow],
+            [NSGridCell.emptyContentView, autoSave],
+        ])
+        grid.rowSpacing = 16
+        grid.columnSpacing = 12
+        grid.column(at: 0).xPlacement = .trailing
+        grid.translatesAutoresizingMaskIntoConstraints = false
+
+        let content = NSView()
+        content.addSubview(grid)
+        NSLayoutConstraint.activate([
+            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
+        ])
+        window?.contentView = content
+    }
+
+    private func refresh() {
+        let path = prefs.saveDirectory.path
+        pathLabel.stringValue = prefs.usingDefaultDirectory ? "\(path)  (default)" : path
+        pathLabel.toolTip = path
+        prefixField.stringValue = prefs.filenamePrefix
+        previewLabel.stringValue = "e.g. " + prefs.previewFilename()
+    }
+
+    // MARK: - Actions
+
+    @objc private func choose() {
+        guard let window = window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = prefs.saveDirectory
+        panel.prompt = "Choose"
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.prefs.saveDirectoryPath = url.path
+            self?.refresh()
+        }
+    }
+
+    @objc private func useDefault() {
+        prefs.saveDirectoryPath = nil
+        refresh()
+    }
+
+    @objc private func prefixChanged() {
+        prefs.filenamePrefix = prefixField.stringValue.trimmingCharacters(in: .whitespaces)
+        refresh()
+    }
+
+    @objc private func autoSaveToggled(_ sender: NSButton) {
+        prefs.autoSave = (sender.state == .on)
+    }
+}

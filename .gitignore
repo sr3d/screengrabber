@@ -2,3 +2,8 @@
 ScreenGrabber.app/
 *.png
 .DS_Store
+*.dmg
+
+# Icon build artifacts — AppIcon.icns is committed; these are regenerated.
+Icon/AppIcon.iconset/
+!Icon/AppIcon-1024.png

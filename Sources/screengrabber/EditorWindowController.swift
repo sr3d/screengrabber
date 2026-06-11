@@ -7,18 +7,25 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let canvas: CanvasView
     private let colorWell = NSColorWell()
 
+    /// If set, the composited image is written here when the window closes
+    /// (auto-save). The raw capture was already written here at capture time.
+    private let autoSaveURL: URL?
+    private let onOpenPreferences: (() -> Void)?
+
     /// Called when the window closes, so the app delegate can drop its reference.
     var onClose: (() -> Void)?
 
-    init(image: CGImage) {
-        canvas = CanvasView(image: image)
+    init(image: CGImage, autoSaveURL: URL?, onOpenPreferences: (() -> Void)?) {
+        self.canvas = CanvasView(image: image)
+        self.autoSaveURL = autoSaveURL
+        self.onOpenPreferences = onOpenPreferences
 
         let toolbarHeight: CGFloat = 44
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let maxW = screen.width * 0.9
         let maxH = screen.height * 0.9 - toolbarHeight
         let fit = min(1, min(maxW / CGFloat(image.width), maxH / CGFloat(image.height)))
-        let contentW = max(560, CGFloat(image.width) * fit)
+        let contentW = max(820, CGFloat(image.width) * fit)
         let contentH = CGFloat(image.height) * fit + toolbarHeight
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: contentW, height: contentH),
@@ -26,7 +33,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
                               backing: .buffered, defer: false)
         window.title = "ScreenGrabber"
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 560, height: 360)
+        window.minSize = NSSize(width: 820, height: 360)
         window.center()
 
         super.init(window: window)
@@ -41,16 +48,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private func buildContent(toolbarHeight: CGFloat) {
         let content = NSView()
 
-        let tools = NSSegmentedControl(labels: ["⌖ Select", "→ Arrow", "▢ Rect", "◯ Circle", "▦ Blur", "■ Box", "T Text"],
-                                       trackingMode: .selectOne,
-                                       target: self, action: #selector(toolChanged(_:)))
-        tools.selectedSegment = 1  // start on Arrow so the first drag draws
+        let tools = makeToolControl()
 
         // After drawing a shape, auto-switch to Select mode to adjust it.
         canvas.onDrawFinished = { [weak self, weak tools] in
             tools?.selectedSegment = 0
             self?.canvas.selectMode = true
         }
+        // Keyboard tool shortcuts keep the toolbar highlight in sync.
+        canvas.onToolPicked = { [weak tools] segment in tools?.selectedSegment = segment }
+        canvas.onOpenPreferences = onOpenPreferences
 
         colorWell.color = .systemRed
         colorWell.target = self
@@ -62,6 +69,18 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
                                    target: self, action: #selector(widthChanged(_:)))
         widthSlider.translatesAutoresizingMaskIntoConstraints = false
         widthSlider.widthAnchor.constraint(equalToConstant: 90).isActive = true
+        widthSlider.toolTip = "Stroke width"
+
+        let sizeLabel = NSTextField(labelWithString: "Aa")
+        sizeLabel.textColor = .secondaryLabelColor
+        let sizePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+        sizePopup.addItems(withTitles: ["12", "16", "20", "28", "36", "48", "64"])
+        sizePopup.selectItem(withTitle: "28")
+        sizePopup.target = self
+        sizePopup.action = #selector(fontSizeChanged(_:))
+        sizePopup.toolTip = "Text size"
+        sizePopup.translatesAutoresizingMaskIntoConstraints = false
+        sizePopup.widthAnchor.constraint(equalToConstant: 64).isActive = true
 
         let undo = makeButton("Undo", action: #selector(undo(_:)), key: "z")
         let clear = makeButton("Clear", action: #selector(clearAll(_:)), key: "")
@@ -71,7 +90,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let bar = NSStackView(views: [tools, colorWell, widthSlider, spacer, undo, clear, save, copy])
+        let bar = NSStackView(views: [tools, sizeLabel, sizePopup,
+                                      spacer, undo, clear, save, copy, colorWell, widthSlider])
         bar.orientation = .horizontal
         bar.spacing = 8
         bar.alignment = .centerY
@@ -96,6 +116,31 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
         window?.contentView = content
         window?.makeFirstResponder(canvas)
+    }
+
+    private func makeToolControl() -> NSSegmentedControl {
+        let tools = NSSegmentedControl()
+        tools.segmentCount = 7
+        tools.trackingMode = .selectOne
+        tools.target = self
+        tools.action = #selector(toolChanged(_:))
+        // (SF Symbol, tooltip) per segment. Segment 0 is Select.
+        let segs: [(String, String)] = [
+            ("cursorarrow", "Select"),
+            ("arrow.up.right", "Arrow (1)"),
+            ("rectangle", "Rectangle (2)"),
+            ("circle", "Circle (3)"),
+            ("square.grid.3x3.fill", "Blur (4)"),
+            ("rectangle.fill", "Box (5)"),
+            ("character", "Text (T)"),
+        ]
+        for (i, seg) in segs.enumerated() {
+            tools.setImage(NSImage(systemSymbolName: seg.0, accessibilityDescription: seg.1), forSegment: i)
+            tools.setToolTip(seg.1, forSegment: i)
+            tools.setWidth(36, forSegment: i)
+        }
+        tools.selectedSegment = 1  // start on Arrow so the first drag draws
+        return tools
     }
 
     private func makeButton(_ title: String, action: Selector, key: String) -> NSButton {
@@ -130,6 +175,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         canvas.setSelectedLineWidth(CGFloat(sender.doubleValue))
     }
 
+    @objc private func fontSizeChanged(_ sender: NSPopUpButton) {
+        let size = CGFloat(Int(sender.titleOfSelectedItem ?? "28") ?? 28)
+        canvas.currentFontSize = size
+        canvas.setSelectedFontSize(size)
+    }
+
     @objc private func undo(_ sender: Any?) { canvas.undo() }
     @objc private func clearAll(_ sender: Any?) { canvas.clearAll() }
 
@@ -151,7 +202,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         guard let cg = canvas.compositeImage(), let window = window else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "Screenshot.png"
+        panel.directoryURL = Preferences.shared.saveDirectory
+        panel.nameFieldStringValue = Preferences.shared.previewFilename()
         panel.canCreateDirectories = true
         panel.beginSheetModal(for: window) { response in
             guard response == .OK, let url = panel.url else { return }
@@ -174,6 +226,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        // Update the auto-saved file with the final annotated image.
+        if let url = autoSaveURL, let cg = canvas.compositeImage() {
+            writePNG(cg, to: url)
+        }
         onClose?()
     }
 }

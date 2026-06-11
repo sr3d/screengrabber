@@ -19,7 +19,8 @@ struct Annotation {
     var end: CGPoint
     var color: NSColor
     var lineWidth: CGFloat
-    var text: String = ""   // used by the .text tool only
+    var text: String = ""        // used by the .text tool only
+    var fontSize: CGFloat = 28   // used by the .text tool only
 }
 
 /// The drawing surface. It letterboxes the captured image to fit, maps mouse
@@ -50,6 +51,7 @@ final class CanvasView: NSView {
     var currentTool: Tool = .arrow
     var currentColor: NSColor = .systemRed
     var currentLineWidth: CGFloat = 4
+    var currentFontSize: CGFloat = 28
 
     /// When true, clicks select / move / resize existing shapes instead of
     /// drawing new ones.
@@ -62,6 +64,13 @@ final class CanvasView: NSView {
     /// Called after a drag-drawn shape is committed, so the host can flip the
     /// toolbar into Select mode (the new shape is already selected).
     var onDrawFinished: (() -> Void)?
+
+    /// Called when a keyboard shortcut picks a tool, with the toolbar segment
+    /// index to highlight (0 = Select, then tool.rawValue + 1).
+    var onToolPicked: ((Int) -> Void)?
+
+    /// Called when ⌘, is pressed, to open Preferences.
+    var onOpenPreferences: (() -> Void)?
 
     private var activeDrag: Drag = .none
     private var moveFrom: CGPoint = .zero
@@ -140,8 +149,9 @@ final class CanvasView: NSView {
             beginSelection(at: p)
         } else if currentTool == .text {
             // Place a text box at the click point and start typing.
-            let a = Annotation(tool: .text, start: p, end: p,
+            var a = Annotation(tool: .text, start: p, end: p,
                                color: currentColor, lineWidth: currentLineWidth)
+            a.fontSize = currentFontSize
             annotations.append(a)
             let idx = annotations.count - 1
             selectedIndex = idx
@@ -223,8 +233,9 @@ final class CanvasView: NSView {
                 } else {
                     annotations[i].text.append("\n")
                 }
-            case 53:           // escape -> commit
+            case 53:           // escape -> commit and return to Select mode
                 commitTextEditing()
+                enterSelectMode()
             case 51:           // backspace
                 if !annotations[i].text.isEmpty { annotations[i].text.removeLast() }
             default:
@@ -238,6 +249,8 @@ final class CanvasView: NSView {
             return
         }
 
+        if handleToolShortcut(event) { return }
+
         // 51 = delete/backspace, 117 = forward delete.
         if (event.keyCode == 51 || event.keyCode == 117), let i = selectedIndex {
             annotations.remove(at: i)
@@ -246,6 +259,52 @@ final class CanvasView: NSView {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) {
+            switch event.charactersIgnoringModifiers {
+            case ",":
+                onOpenPreferences?()
+                return true
+            case "w":
+                // Accessory apps have no menu bar, so ⌘W isn't wired by default.
+                window?.performClose(nil)
+                return true
+            default:
+                break
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// Plain-key tool shortcuts: 1 Arrow, 2 Rect, 3 Circle, 4 Blur, 5 Box, T Text.
+    private func handleToolShortcut(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+              let ch = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        switch ch {
+        case "1": pickTool(.arrow)
+        case "2": pickTool(.rectangle)
+        case "3": pickTool(.ellipse)
+        case "4": pickTool(.blur)
+        case "5": pickTool(.box)
+        case "t": pickTool(.text)
+        default: return false
+        }
+        return true
+    }
+
+    private func pickTool(_ tool: Tool) {
+        selectMode = false
+        currentTool = tool
+        onToolPicked?(tool.rawValue + 1)  // segment 0 is Select
+        needsDisplay = true
+    }
+
+    private func enterSelectMode() {
+        selectMode = true
+        onToolPicked?(0)  // highlight the Select segment
+        needsDisplay = true
     }
 
     private func commitTextEditing() {
@@ -288,6 +347,18 @@ final class CanvasView: NSView {
         guard let i = selectedIndex else { return }
         annotations[i].lineWidth = width
         needsDisplay = true
+    }
+
+    func setSelectedFontSize(_ size: CGFloat) {
+        guard let i = selectedIndex, annotations[i].tool == .text else { return }
+        annotations[i].fontSize = size
+        needsDisplay = true
+    }
+
+    /// Font size of the selected text box, if one is selected.
+    var selectedTextFontSize: CGFloat? {
+        guard let i = selectedIndex, annotations[i].tool == .text else { return nil }
+        return annotations[i].fontSize
     }
 
     // MARK: - Hit testing
@@ -371,7 +442,7 @@ final class CanvasView: NSView {
 
     // MARK: - Text metrics
 
-    private func fontSize(for a: Annotation) -> CGFloat { max(18, a.lineWidth * 5) }
+    private func fontSize(for a: Annotation) -> CGFloat { max(8, a.fontSize) }
 
     private func textFont(for a: Annotation) -> NSFont {
         NSFont.systemFont(ofSize: fontSize(for: a), weight: .semibold)
