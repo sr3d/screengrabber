@@ -56,10 +56,23 @@ inside? See the [**Developer docs**](docs/README.md).
 2. **Grant Screen Recording.** The first capture triggers the macOS permission
    prompt → enable ScreenGrabber under *System Settings ▸ Privacy & Security ▸
    Screen Recording*, then relaunch the app.
-3. **Free up ⇧⌘4 (the hotkey).** macOS owns ⇧⌘4 by default. Turn it off at
-   *System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Screenshots* →
-   uncheck **"Save picture of selected area as a file"**. ScreenGrabber then
-   owns ⇧⌘4. (You can still capture via the menu-bar icon regardless.)
+
+   > **Permission prompt keeps coming back even after you allow it?** That means
+   > the quarantine flag is still on the app, so macOS runs it from a random
+   > location each launch and the grant never sticks. Strip it once (the same
+   > command as the Gatekeeper step above) and the permission will hold:
+   > ```bash
+   > xattr -dr com.apple.quarantine /Applications/ScreenGrabber.app
+   > tccutil reset ScreenCapture com.sr3d.screengrabber   # clears the stale grant
+   > ```
+3. **The ⇧⌘4 hotkey just works.** While ScreenGrabber is running it takes over
+   ⇧⌘4 automatically (macOS normally owns it), and hands it back to the built-in
+   screenshot tool when you quit. No System Settings changes needed. (You can
+   always capture via the menu-bar icon too.)
+
+   > On a macOS version where ScreenGrabber can't toggle the system shortcut,
+   > free up ⇧⌘4 yourself at *System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸
+   > Screenshots* → uncheck **"Save picture of selected area as a file"**.
 
 ## Use
 

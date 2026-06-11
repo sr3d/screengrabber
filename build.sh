@@ -28,8 +28,11 @@ cp "$BIN" "$APP/Contents/MacOS/screengrabber"
 cp Info.plist "$APP/Contents/Info.plist"
 cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-# Ad-hoc sign so the app has a stable identity for TCC (Screen Recording)
-# permission persistence across rebuilds.
+# Ad-hoc sign so the app has a valid (if unverified) code signature. NOTE: an
+# ad-hoc signature is NOT stable across rebuilds — its identity is the binary's
+# cdhash, which changes every build. So macOS sees each rebuild as a new app and
+# re-prompts for Screen Recording. To keep the grant after a rebuild, reset and
+# re-grant once:  tccutil reset ScreenCapture com.sr3d.screengrabber
 echo "==> Ad-hoc signing…"
 codesign --force --deep --sign - "$APP"
 
