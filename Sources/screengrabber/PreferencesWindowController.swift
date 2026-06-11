@@ -10,7 +10,7 @@ final class PreferencesWindowController: NSWindowController {
     private let previewLabel = NSTextField(labelWithString: "")
 
     init() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 220),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 290),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "ScreenGrabber Settings"
         window.isReleasedWhenClosed = false
@@ -42,15 +42,25 @@ final class PreferencesWindowController: NSWindowController {
         let filenameRow = NSStackView(views: [prefixField, previewLabel])
         filenameRow.spacing = 10
 
-        // Auto-save row.
+        // Capture-behavior toggles.
         let autoSave = NSButton(checkboxWithTitle: "Save a file automatically when a screenshot is taken",
                                 target: self, action: #selector(autoSaveToggled(_:)))
         autoSave.state = prefs.autoSave ? .on : .off
 
+        let copyOnCapture = NSButton(checkboxWithTitle: "Copy screenshot to the clipboard automatically",
+                                     target: self, action: #selector(copyOnCaptureToggled(_:)))
+        copyOnCapture.state = prefs.copyToClipboardOnCapture ? .on : .off
+
+        let showEditor = NSButton(checkboxWithTitle: "Show the editor after taking a screenshot",
+                                  target: self, action: #selector(showEditorToggled(_:)))
+        showEditor.state = prefs.showEditorOnCapture ? .on : .off
+
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Save to:"), locationRow],
             [NSTextField(labelWithString: "Filename:"), filenameRow],
-            [NSGridCell.emptyContentView, autoSave],
+            [NSTextField(labelWithString: "On capture:"), autoSave],
+            [NSGridCell.emptyContentView, copyOnCapture],
+            [NSGridCell.emptyContentView, showEditor],
         ])
         grid.rowSpacing = 16
         grid.columnSpacing = 12
@@ -104,5 +114,13 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func autoSaveToggled(_ sender: NSButton) {
         prefs.autoSave = (sender.state == .on)
+    }
+
+    @objc private func copyOnCaptureToggled(_ sender: NSButton) {
+        prefs.copyToClipboardOnCapture = (sender.state == .on)
+    }
+
+    @objc private func showEditorToggled(_ sender: NSButton) {
+        prefs.showEditorOnCapture = (sender.state == .on)
     }
 }

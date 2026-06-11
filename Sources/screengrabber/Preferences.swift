@@ -11,15 +11,29 @@ final class Preferences {
         static let saveDirPath = "saveDirectoryPath"
         static let prefix = "filenamePrefix"
         static let autoSave = "autoSaveOnCapture"
+        static let copyOnCapture = "copyToClipboardOnCapture"
+        static let showEditor = "showEditorOnCapture"
     }
 
     private init() {}
 
-    // MARK: - Auto-save
+    // MARK: - Capture behavior
 
     var autoSave: Bool {
         get { defaults.object(forKey: Key.autoSave) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.autoSave) }
+    }
+
+    /// Copy the freshly captured image to the clipboard immediately on capture.
+    var copyToClipboardOnCapture: Bool {
+        get { defaults.object(forKey: Key.copyOnCapture) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.copyOnCapture) }
+    }
+
+    /// Open the annotation editor after capture. Off = streamlined capture-only.
+    var showEditorOnCapture: Bool {
+        get { defaults.object(forKey: Key.showEditor) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.showEditor) }
     }
 
     // MARK: - Save location
@@ -86,6 +100,17 @@ final class Preferences {
             n += 1
         }
         return url
+    }
+}
+
+/// Copies a CGImage to the general pasteboard as both an NSImage (TIFF) and
+/// explicit PNG data — some apps (incl. Slack) prefer PNG over TIFF.
+func copyImageToClipboard(_ image: CGImage) {
+    let pb = NSPasteboard.general
+    pb.clearContents()
+    pb.writeObjects([NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))])
+    if let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+        pb.setData(png, forType: .png)
     }
 }
 

@@ -91,9 +91,14 @@ Open from the menu-bar icon ▸ *Settings…* (or **⌘,** in the editor):
   changed it); choose any folder, or reset to default.
 - **Filename** — defaults to the macOS convention (`Screenshot <date> at <time>.png`);
   customize the prefix.
-- **Save automatically on capture** (default **on**) — writes a PNG the moment you
-  capture, then updates that same file with your annotations when you close the editor.
-  Turn it off if you only want to copy to the clipboard.
+- **On capture** — what happens the moment you finish dragging a region:
+  - **Save a file automatically** (default **on**) — writes a PNG immediately, then
+    updates that same file with your annotations when you close the editor.
+  - **Copy to the clipboard automatically** (default **on**) — the screenshot is
+    paste-ready right away (a "Screenshot copied to clipboard" toast confirms it), so
+    you can capture and ⌘V into Slack without opening the editor.
+  - **Show the editor after a screenshot** (default **on**) — turn it off for a
+    streamlined capture-only workflow (just save and/or copy, no editor window).
 
 ## Development
 

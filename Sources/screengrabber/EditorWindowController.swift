@@ -186,15 +186,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     @objc private func copyToClipboard(_ sender: Any?) {
         guard let cg = canvas.compositeImage() else { return }
-        let rep = NSBitmapImageRep(cgImage: cg)
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        let nsImage = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-        pb.writeObjects([nsImage])
-        // Also expose PNG explicitly; some apps (incl. Slack) prefer it over TIFF.
-        if let png = rep.representation(using: .png, properties: [:]) {
-            pb.setData(png, forType: .png)
-        }
+        copyImageToClipboard(cg)
         flashTitle("Copied to clipboard ✓")
     }
 

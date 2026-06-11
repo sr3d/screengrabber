@@ -104,16 +104,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             self.capturing = false
             guard let image = image else { return }
+            let prefs = Preferences.shared
+
+            // Copy straight to the clipboard so a quick capture is paste-ready.
+            if prefs.copyToClipboardOnCapture {
+                copyImageToClipboard(image)
+                Toast.show("Screenshot copied to clipboard")
+            }
 
             // Auto-save: write the raw capture immediately (so a file exists right
             // away, like the system shortcut); the editor updates it on close.
             var autoSaveURL: URL?
-            if Preferences.shared.autoSave {
-                let url = Preferences.shared.makeFileURL()
+            if prefs.autoSave {
+                let url = prefs.makeFileURL()
                 writePNG(image, to: url)
                 autoSaveURL = url
             }
-            self.openEditor(with: image, autoSaveURL: autoSaveURL)
+
+            if prefs.showEditorOnCapture {
+                self.openEditor(with: image, autoSaveURL: autoSaveURL)
+            } else if !prefs.copyToClipboardOnCapture, autoSaveURL != nil {
+                // No editor and no copy toast yet — confirm the save instead.
+                Toast.show("Screenshot saved")
+            }
         }
     }
 
