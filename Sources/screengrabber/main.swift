@@ -9,16 +9,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var editors: [EditorWindowController] = []
     private var capturing = false
     private var preferencesController: PreferencesWindowController?
+    /// The system ⇧⌘4 shortcut's enabled-state before we took it over, so we can
+    /// hand it back on a clean quit.
+    private var systemShortcutWasEnabled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
 
-        // ⇧⌘4 — kVK_ANSI_4 is 0x15. Disable the macOS built-in shortcut in
-        // System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Screenshots so this
-        // one wins.
+        // Take ⇧⌘4 from the system so our Carbon hot key wins. macOS's
+        // WindowServer fires the built-in screenshot shortcut before Carbon hot
+        // keys are dispatched, so we must disable the system shortcut first —
+        // otherwise it pre-empts us and `screencapture` runs instead.
+        systemShortcutWasEnabled = SystemShortcuts.isEnabled(SystemShortcuts.saveSelectedAreaToFile)
+        if SystemShortcuts.isAvailable {
+            SystemShortcuts.setEnabled(SystemShortcuts.saveSelectedAreaToFile, false)
+        } else {
+            NSLog("ScreenGrabber: can't toggle the system ⇧⌘4 shortcut on this macOS; " +
+                  "disable it manually in System Settings ▸ Keyboard ▸ Shortcuts ▸ Screenshots.")
+        }
+
+        // ⇧⌘4 — kVK_ANSI_4 is 0x15.
         HotKeyCenter.shared.register(keyCode: UInt32(kVK_ANSI_4),
                                      modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
             self?.beginCapture()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Be polite: when ScreenGrabber isn't running, give ⇧⌘4 back to macOS
+        // if that's how we found it.
+        if systemShortcutWasEnabled {
+            SystemShortcuts.setEnabled(SystemShortcuts.saveSelectedAreaToFile, true)
         }
     }
 
