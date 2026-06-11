@@ -18,7 +18,7 @@ for a in ${ARCHS:-}; do ARCH_FLAGS="$ARCH_FLAGS --arch $a"; done
 echo "==> Compiling (release)…"
 swift build -c release $ARCH_FLAGS
 
-APP="ScreenGrabber.app"
+APP="dist/ScreenGrabber.app"
 BIN="$(swift build -c release $ARCH_FLAGS --show-bin-path)/screengrabber"
 
 echo "==> Assembling ${APP}…"

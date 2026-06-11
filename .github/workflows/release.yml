@@ -26,4 +26,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "ScreenGrabber ${GITHUB_REF_NAME}" \
             --generate-notes \
-            ScreenGrabber-*.dmg
+            dist/ScreenGrabber-*.dmg

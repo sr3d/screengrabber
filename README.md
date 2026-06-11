@@ -101,14 +101,15 @@ Requires the **Xcode Command Line Tools** (Swift 5.9+). No full Xcode needed for
 local build.
 
 ```bash
-./build.sh          # compile + assemble + ad-hoc sign ScreenGrabber.app
-open ScreenGrabber.app
+./build.sh          # compile + assemble + ad-hoc sign → dist/ScreenGrabber.app
+open dist/ScreenGrabber.app
 ```
 
-`build.sh` compiles the SwiftPM executable, assembles `ScreenGrabber.app`, copies in
-the icon, and ad-hoc signs it (so the Screen Recording permission sticks across
-rebuilds). It builds for your host architecture by default; pass `ARCHS` for a
-universal binary (needs a full Xcode install):
+`build.sh` compiles the SwiftPM executable, assembles `dist/ScreenGrabber.app`,
+copies in the icon, and ad-hoc signs it (so the Screen Recording permission sticks
+across rebuilds). All build output lands in `dist/` (git-ignored). It builds for
+your host architecture by default; pass `ARCHS` for a universal binary (needs a
+full Xcode install):
 
 ```bash
 ARCHS="arm64 x86_64" ./build.sh
@@ -121,7 +122,8 @@ ARCHS="arm64 x86_64" ./build.sh
 ARCHS="arm64 x86_64" ./package.sh   # universal .dmg (needs full Xcode)
 ```
 
-Produces `ScreenGrabber-<version>.dmg` with a drag-to-Applications shortcut.
+Produces `dist/ScreenGrabber-<version>.dmg` — with a drag-to-Applications shortcut
+and the app icon as the volume and file icon.
 
 ### The app icon
 
