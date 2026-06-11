@@ -25,8 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "scissors", accessibilityDescription: "ScreenGrabber")
-            button.image?.isTemplate = true
+            button.image = AppDelegate.menuBarIcon()
         }
 
         let menu = NSMenu()
@@ -49,6 +48,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit ScreenGrabber",
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    /// A template menu-bar glyph mirroring the app icon: the selection-region
+    /// brackets with an annotation arrow inside. Template = adapts to light/dark.
+    static func menuBarIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            let S = rect.width, u = S / 18.0
+            ctx.setStrokeColor(NSColor.black.cgColor)
+            ctx.setFillColor(NSColor.black.cgColor)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+
+            // Selection brackets.
+            let inset: CGFloat = 1.4 * u
+            let r = CGRect(x: inset, y: inset, width: S - 2 * inset, height: S - 2 * inset)
+            let arm: CGFloat = 4.6 * u
+            ctx.setLineWidth(1.7 * u)
+            let corners: [(CGPoint, CGPoint, CGPoint)] = [
+                (CGPoint(x: r.minX + arm, y: r.maxY), CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY - arm)),
+                (CGPoint(x: r.maxX - arm, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY - arm)),
+                (CGPoint(x: r.minX + arm, y: r.minY), CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.minX, y: r.minY + arm)),
+                (CGPoint(x: r.maxX - arm, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.maxX, y: r.minY + arm)),
+            ]
+            for (a, c, b) in corners { ctx.move(to: a); ctx.addLine(to: c); ctx.addLine(to: b); ctx.strokePath() }
+
+            // Annotation arrow.
+            let tail = CGPoint(x: 6.0 * u, y: 6.0 * u), tip = CGPoint(x: 12.0 * u, y: 12.0 * u)
+            let dx = tip.x - tail.x, dy = tip.y - tail.y
+            let len = (dx * dx + dy * dy).squareRoot()
+            let ux = dx / len, uy = dy / len, px = -uy, py = ux
+            let headLen: CGFloat = 3.8 * u, headHalf: CGFloat = 2.4 * u
+            let neck = CGPoint(x: tip.x - ux * headLen, y: tip.y - uy * headLen)
+            ctx.setLineWidth(1.9 * u)
+            ctx.move(to: tail); ctx.addLine(to: CGPoint(x: neck.x + ux * 0.4 * u, y: neck.y + uy * 0.4 * u)); ctx.strokePath()
+            ctx.move(to: tip)
+            ctx.addLine(to: CGPoint(x: neck.x + px * headHalf, y: neck.y + py * headHalf))
+            ctx.addLine(to: CGPoint(x: neck.x - px * headHalf, y: neck.y - py * headHalf))
+            ctx.closePath(); ctx.fillPath()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "ScreenGrabber"
+        return image
     }
 
     @objc private func captureMenu() { beginCapture() }
