@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let dx = tip.x - tail.x, dy = tip.y - tail.y
             let len = (dx * dx + dy * dy).squareRoot()
             let ux = dx / len, uy = dy / len, px = -uy, py = ux
-            let headLen: CGFloat = 3.8 * u, headHalf: CGFloat = 2.4 * u
+            let headLen: CGFloat = 5.0 * u, headHalf: CGFloat = 3.3 * u
             let neck = CGPoint(x: tip.x - ux * headLen, y: tip.y - uy * headLen)
             ctx.setLineWidth(1.9 * u)
             ctx.move(to: tail); ctx.addLine(to: CGPoint(x: neck.x + ux * 0.4 * u, y: neck.y + uy * 0.4 * u)); ctx.strokePath()
