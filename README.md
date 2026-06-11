@@ -41,7 +41,8 @@ built-in ⇧⌘4.
 > Requires **macOS 13 (Ventura) or later**. The release build is a universal
 > binary — it runs natively on both Apple Silicon and Intel Macs.
 
-Prefer to build it yourself? See [Development](#development).
+Prefer to build it yourself? See [Development](#development). Curious how it works
+inside? See the [**Developer docs**](docs/README.md).
 
 ## First-run setup
 
@@ -58,7 +59,7 @@ Prefer to build it yourself? See [Development](#development).
 
 - Press **⇧⌘4** (or menu-bar icon ▸ *Capture Region*) and drag a region.
 - The editor opens. Pick a tool, color, and stroke width in the toolbar:
-  - **Arrow / Rect / Circle** — annotate
+  - **Arrow / Line / Rect / Circle** — annotate
   - **Blur** — pixelate a region (obscure tokens, emails, faces)
   - **Box** — solid black redaction bar
   - **Text** — click a point and type; **Return** adds a new line, **Esc** or **⌘Return** finishes
@@ -76,9 +77,10 @@ Prefer to build it yourself? See [Development](#development).
 
 | Key | Tool | | Key | Tool |
 |-----|------|-|-----|------|
-| `1` | Arrow | | `4` | Blur |
-| `2` | Rectangle | | `5` | Box |
-| `3` | Circle | | `T` | Text |
+| `1` | Select | | `5` | Circle |
+| `2` | Arrow | | `6` | Blur |
+| `3` | Line | | `7` | Box |
+| `4` | Rectangle | | `T` | Text |
 
 The **`Aa` dropdown** (next to the tools) sets text size. Color and stroke-width
 controls are at the right end of the toolbar.
@@ -99,10 +101,18 @@ Open from the menu-bar icon ▸ *Settings…* (or **⌘,** in the editor):
     you can capture and ⌘V into Slack without opening the editor.
   - **Show the editor after a screenshot** (default **on**) — turn it off for a
     streamlined capture-only workflow (just save and/or copy, no editor window).
+- **Default tool** (default **Arrow**) — which tool is active when the editor opens.
+  Pick any tool, or **Select** to open in selection mode (handy if you mostly tweak
+  existing shapes rather than draw new ones).
 - **Start ScreenGrabber at login** (default **off**) — registers the app as a macOS
   login item so it's always in your menu bar after a restart.
 
 ## Development
+
+> **New to the code?** The [**Developer docs**](docs/README.md) explain how the app
+> works internally — start with the [architecture overview](docs/architecture.md),
+> then the [Canvas editor deep dive](docs/canvas-editor.md) (the annotation engine),
+> and [how to add shapes](docs/adding-shapes.md). Written for readers new to Swift.
 
 Requires the **Xcode Command Line Tools** (Swift 5.9+). No full Xcode needed for a
 local build.
@@ -162,7 +172,7 @@ GitHub Release with auto-generated notes.
 | `Sources/screengrabber/main.swift` | App bootstrap, menu-bar item, ⇧⌘4 wiring, About, auto-save |
 | `HotKeyCenter.swift` | Carbon global hotkey (no Accessibility permission needed) |
 | `CaptureController.swift` | Runs `screencapture -i`, returns a CGImage |
-| `CanvasView.swift` | Drawing surface, annotation model, selection/handles, tool shortcuts, export |
+| `CanvasView.swift` | Drawing surface, annotation model, selection/handles, tool shortcuts, export — see the [deep dive](docs/canvas-editor.md) |
 | `EditorWindowController.swift` | Toolbar + canvas window, text size, Save/Copy |
 | `Preferences.swift` | Settings (UserDefaults) + PNG writing |
 | `PreferencesWindowController.swift` | Settings window |

@@ -59,6 +59,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         canvas.onToolPicked = { [weak tools] segment in tools?.selectedSegment = segment }
         canvas.onOpenPreferences = onOpenPreferences
 
+        // Start on the user's default tool (nil = Select mode, no drawing).
+        if let tool = Preferences.shared.defaultTool {
+            canvas.selectMode = false
+            canvas.currentTool = tool
+            tools.selectedSegment = (Tool.paletteOrder.firstIndex(of: tool) ?? 0) + 1
+        } else {
+            canvas.selectMode = true
+            tools.selectedSegment = 0
+        }
+
         colorWell.color = .systemRed
         colorWell.target = self
         colorWell.action = #selector(colorChanged(_:))
@@ -120,26 +130,25 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     private func makeToolControl() -> NSSegmentedControl {
         let tools = NSSegmentedControl()
-        tools.segmentCount = 7
+        let palette = Tool.paletteOrder
+        tools.segmentCount = palette.count + 1   // + Select at segment 0
         tools.trackingMode = .selectOne
         tools.target = self
         tools.action = #selector(toolChanged(_:))
-        // (SF Symbol, tooltip) per segment. Segment 0 is Select.
-        let segs: [(String, String)] = [
-            ("cursorarrow", "Select"),
-            ("arrow.up.right", "Arrow (1)"),
-            ("rectangle", "Rectangle (2)"),
-            ("circle", "Circle (3)"),
-            ("square.grid.3x3.fill", "Blur (4)"),
-            ("rectangle.fill", "Box (5)"),
-            ("character", "Text (T)"),
-        ]
-        for (i, seg) in segs.enumerated() {
-            tools.setImage(NSImage(systemSymbolName: seg.0, accessibilityDescription: seg.1), forSegment: i)
-            tools.setToolTip(seg.1, forSegment: i)
-            tools.setWidth(36, forSegment: i)
+
+        // Segment 0 is Select (shortcut "1"); the rest follow Tool.paletteOrder,
+        // with number shortcuts "2"… (Text keeps "T").
+        tools.setImage(NSImage(systemSymbolName: "cursorarrow", accessibilityDescription: "Select"), forSegment: 0)
+        tools.setToolTip("Select (1)", forSegment: 0)
+        tools.setWidth(36, forSegment: 0)
+        for (i, tool) in palette.enumerated() {
+            let seg = i + 1
+            let key = (tool == .text) ? "T" : "\(i + 2)"
+            tools.setImage(NSImage(systemSymbolName: tool.symbolName, accessibilityDescription: tool.displayName),
+                           forSegment: seg)
+            tools.setToolTip("\(tool.displayName) (\(key))", forSegment: seg)
+            tools.setWidth(36, forSegment: seg)
         }
-        tools.selectedSegment = 1  // start on Arrow so the first drag draws
         return tools
     }
 
@@ -156,12 +165,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Actions
 
     @objc private func toolChanged(_ sender: NSSegmentedControl) {
-        // Segment 0 is Select mode; the rest map to draw tools (offset by one).
+        // Segment 0 is Select mode; the rest map to Tool.paletteOrder (offset by one).
         if sender.selectedSegment == 0 {
             canvas.selectMode = true
         } else {
             canvas.selectMode = false
-            canvas.currentTool = Tool(rawValue: sender.selectedSegment - 1) ?? .arrow
+            canvas.currentTool = Tool.paletteOrder[sender.selectedSegment - 1]
         }
     }
 

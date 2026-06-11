@@ -14,6 +14,7 @@ final class Preferences {
         static let autoSave = "autoSaveOnCapture"
         static let copyOnCapture = "copyToClipboardOnCapture"
         static let showEditor = "showEditorOnCapture"
+        static let defaultTool = "defaultDrawingTool"
     }
 
     private init() {}
@@ -35,6 +36,16 @@ final class Preferences {
     var showEditorOnCapture: Bool {
         get { defaults.object(forKey: Key.showEditor) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.showEditor) }
+    }
+
+    /// The tool active when the editor opens. nil = Select mode (no drawing tool).
+    /// Stored by stable string id so it survives tool reordering. Defaults to Arrow.
+    var defaultTool: Tool? {
+        get {
+            guard let raw = defaults.string(forKey: Key.defaultTool) else { return .arrow }
+            return Tool(persistID: raw)   // "select" (or unknown) → nil
+        }
+        set { defaults.set(newValue?.persistID ?? "select", forKey: Key.defaultTool) }
     }
 
     // MARK: - Start at login

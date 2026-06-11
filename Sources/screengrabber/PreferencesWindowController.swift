@@ -9,8 +9,12 @@ final class PreferencesWindowController: NSWindowController {
     private let prefixField = NSTextField(string: "")
     private let previewLabel = NSTextField(labelWithString: "")
 
+    /// Default-tool popup entries, in display order. nil = Select (no tool).
+    private let toolItems: [(title: String, tool: Tool?)] =
+        [("Select (no tool)", nil)] + Tool.paletteOrder.map { ($0.displayName, $0) }
+
     init() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 330),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 370),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "ScreenGrabber Settings"
         window.isReleasedWhenClosed = false
@@ -55,6 +59,15 @@ final class PreferencesWindowController: NSWindowController {
                                   target: self, action: #selector(showEditorToggled(_:)))
         showEditor.state = prefs.showEditorOnCapture ? .on : .off
 
+        // Default drawing tool.
+        let toolPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+        toolPopup.addItems(withTitles: toolItems.map { $0.title })
+        let currentTool = prefs.defaultTool
+        toolPopup.selectItem(at: toolItems.firstIndex { $0.tool == currentTool } ?? 0)
+        toolPopup.target = self
+        toolPopup.action = #selector(defaultToolChanged(_:))
+        toolPopup.toolTip = "Tool selected when the editor opens"
+
         // Startup.
         let startAtLogin = NSButton(checkboxWithTitle: "Start ScreenGrabber at login",
                                     target: self, action: #selector(startAtLoginToggled(_:)))
@@ -66,6 +79,7 @@ final class PreferencesWindowController: NSWindowController {
             [NSTextField(labelWithString: "On capture:"), autoSave],
             [NSGridCell.emptyContentView, copyOnCapture],
             [NSGridCell.emptyContentView, showEditor],
+            [NSTextField(labelWithString: "Default tool:"), toolPopup],
             [NSTextField(labelWithString: "Startup:"), startAtLogin],
         ])
         grid.rowSpacing = 16
@@ -128,6 +142,10 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func showEditorToggled(_ sender: NSButton) {
         prefs.showEditorOnCapture = (sender.state == .on)
+    }
+
+    @objc private func defaultToolChanged(_ sender: NSPopUpButton) {
+        prefs.defaultTool = toolItems[sender.indexOfSelectedItem].tool
     }
 
     @objc private func startAtLoginToggled(_ sender: NSButton) {

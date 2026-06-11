@@ -8,6 +8,59 @@ enum Tool: Int {
     case blur
     case box
     case text
+    case line        // appended (rawValue 6); display order lives in `paletteOrder`
+}
+
+extension Tool {
+    /// The order tools appear in the toolbar and under the number-key shortcuts
+    /// (segment 0 / key "1" is Select, handled separately). This is decoupled
+    /// from `rawValue` so tools can be reordered without breaking storage.
+    static let paletteOrder: [Tool] = [.arrow, .line, .rectangle, .ellipse, .blur, .box, .text]
+
+    /// SF Symbol name for the toolbar.
+    var symbolName: String {
+        switch self {
+        case .arrow: return "arrow.up.right"
+        case .line: return "line.diagonal"
+        case .rectangle: return "rectangle"
+        case .ellipse: return "circle"
+        case .blur: return "square.grid.3x3.fill"
+        case .box: return "rectangle.fill"
+        case .text: return "character"
+        }
+    }
+
+    /// Human-readable name for tooltips and the settings popup.
+    var displayName: String {
+        switch self {
+        case .arrow: return "Arrow"
+        case .line: return "Line"
+        case .rectangle: return "Rectangle"
+        case .ellipse: return "Circle"
+        case .blur: return "Blur"
+        case .box: return "Box"
+        case .text: return "Text"
+        }
+    }
+
+    /// A stable string id for persistence (never store `rawValue`, which can shift).
+    var persistID: String {
+        switch self {
+        case .arrow: return "arrow"
+        case .line: return "line"
+        case .rectangle: return "rectangle"
+        case .ellipse: return "ellipse"
+        case .blur: return "blur"
+        case .box: return "box"
+        case .text: return "text"
+        }
+    }
+
+    init?(persistID: String) {
+        guard let match = ([.arrow, .line, .rectangle, .ellipse, .blur, .box, .text] as [Tool])
+            .first(where: { $0.persistID == persistID }) else { return nil }
+        self = match
+    }
 }
 
 /// One drawn annotation, stored in image-pixel coordinates with a bottom-left
@@ -66,7 +119,8 @@ final class CanvasView: NSView {
     var onDrawFinished: (() -> Void)?
 
     /// Called when a keyboard shortcut picks a tool, with the toolbar segment
-    /// index to highlight (0 = Select, then tool.rawValue + 1).
+    /// index to highlight (0 = Select, then the tool's position in
+    /// `Tool.paletteOrder` + 1).
     var onToolPicked: ((Int) -> Void)?
 
     /// Called when ⌘, is pressed, to open Preferences.
@@ -278,27 +332,30 @@ final class CanvasView: NSView {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Plain-key tool shortcuts: 1 Arrow, 2 Rect, 3 Circle, 4 Blur, 5 Box, T Text.
+    /// Plain-key tool shortcuts: "1" Select; "2"… follow `Tool.paletteOrder`
+    /// (2 Arrow, 3 Line, 4 Rectangle, 5 Circle, 6 Blur, 7 Box); "T" Text.
     private func handleToolShortcut(_ event: NSEvent) -> Bool {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
               let ch = event.charactersIgnoringModifiers?.lowercased() else { return false }
-        switch ch {
-        case "1": pickTool(.arrow)
-        case "2": pickTool(.rectangle)
-        case "3": pickTool(.ellipse)
-        case "4": pickTool(.blur)
-        case "5": pickTool(.box)
-        case "t": pickTool(.text)
-        default: return false
+        if ch == "1" { enterSelectMode(); return true }
+        if ch == "t" { pickTool(.text); return true }
+        if let d = Int(ch), d >= 2, d - 2 < Tool.paletteOrder.count {
+            pickTool(Tool.paletteOrder[d - 2])
+            return true
         }
-        return true
+        return false
     }
 
     private func pickTool(_ tool: Tool) {
         selectMode = false
         currentTool = tool
-        onToolPicked?(tool.rawValue + 1)  // segment 0 is Select
+        onToolPicked?(segment(for: tool))
         needsDisplay = true
+    }
+
+    /// Toolbar segment index for a tool (segment 0 is Select).
+    private func segment(for tool: Tool) -> Int {
+        (Tool.paletteOrder.firstIndex(of: tool) ?? 0) + 1
     }
 
     private func enterSelectMode() {
@@ -375,7 +432,7 @@ final class CanvasView: NSView {
         for i in annotations.indices.reversed() {
             let a = annotations[i]
             switch a.tool {
-            case .arrow:
+            case .arrow, .line:
                 if distanceToSegment(p, a.start, a.end) <= max(a.lineWidth, 8 / scale) { return i }
             case .text:
                 if textRect(for: a).insetBy(dx: -6 / scale, dy: -6 / scale).contains(p) { return i }
@@ -399,7 +456,7 @@ final class CanvasView: NSView {
         switch a.tool {
         case .text:
             return []  // text is move-only
-        case .arrow:
+        case .arrow, .line:
             return [(.arrowStart, a.start), (.arrowEnd, a.end)]
         default:
             let r = rect(for: a)
@@ -518,7 +575,7 @@ final class CanvasView: NSView {
     private func drawSelection(_ a: Annotation, into ctx: CGContext) {
         let accent = NSColor.controlAccentColor
 
-        if a.tool != .arrow {
+        if a.tool != .arrow && a.tool != .line {
             let r = (a.tool == .text) ? textRect(for: a) : rect(for: a)
             let p0 = imageToView(CGPoint(x: r.minX, y: r.minY))
             let p1 = imageToView(CGPoint(x: r.maxX, y: r.maxY))
@@ -578,6 +635,13 @@ final class CanvasView: NSView {
             ctx.strokeEllipse(in: rect(for: a))
         case .arrow:
             drawArrow(from: a.start, to: a.end, color: a.color, width: a.lineWidth, into: ctx)
+        case .line:
+            ctx.setStrokeColor(a.color.cgColor)
+            ctx.setLineWidth(a.lineWidth)
+            ctx.setLineCap(.round)
+            ctx.move(to: a.start)
+            ctx.addLine(to: a.end)
+            ctx.strokePath()
         case .box:
             ctx.setFillColor(NSColor.black.cgColor)
             ctx.fill(rect(for: a))
