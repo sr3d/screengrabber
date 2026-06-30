@@ -134,6 +134,9 @@ Open from the menu-bar icon ▸ *Settings…* (or **⌘,** in the editor):
   existing shapes rather than draw new ones).
 - **Start ScreenGrabber at login** (default **off**) — registers the app as a macOS
   login item so it's always in your menu bar after a restart.
+- **Check for updates automatically** — lets the app check for and install new
+  versions in the background via Sparkle. You can also run a check any time from
+  the menu-bar icon ▸ *Check for Updates…*.
 
 ## Development
 
@@ -190,8 +193,38 @@ git tag v1.0
 git push origin v1.0
 ```
 
-GitHub Actions builds a universal `.dmg` on a macOS runner and publishes it to a new
-GitHub Release with auto-generated notes.
+GitHub Actions builds a universal `.dmg` on a macOS runner, publishes it to a new
+GitHub Release with auto-generated notes, and updates the Sparkle **appcast** so
+existing installs auto-update (see below).
+
+### Auto-update (Sparkle)
+
+The app bundles [Sparkle](https://sparkle-project.org). It checks an *appcast*
+feed (`SUFeedURL` in `Info.plist`) in the background and offers to download,
+install, and relaunch new versions. Users can also trigger a check via the
+menu-bar **Check for Updates…** item, and toggle automatic checks in **Settings**.
+
+Updates are verified with an **EdDSA signature**, so they're secure even though
+the app is only ad-hoc code-signed (no paid Apple Developer ID required). The
+public key lives in `Info.plist` (`SUPublicEDKey`); the private key signs each
+release in CI.
+
+The appcast and the `.dmg` files are published to the **`gh-pages`** branch
+(served at `https://sr3d.github.io/screengrabber/appcast.xml`) by
+[`scripts/update-appcast.sh`](scripts/update-appcast.sh), which signs the new
+`.dmg` and regenerates `appcast.xml` from every `.dmg` on that branch.
+
+**One-time setup** (already done for the keypair generated with `generate_keys`):
+
+1. **Add the GitHub Actions secret** `SPARKLE_ED_PRIVATE_KEY` containing the
+   EdDSA private key (Settings ▸ Secrets and variables ▸ Actions). Export it from
+   your Keychain with Sparkle's `generate_keys -x privkey.txt` and paste the file
+   contents.
+2. **Enable GitHub Pages** for the repo with source = **`gh-pages`** branch
+   (Settings ▸ Pages). The first tagged release creates the branch.
+
+To rotate keys, run `generate_keys`, update `SUPublicEDKey` in `Info.plist`, and
+replace the `SPARKLE_ED_PRIVATE_KEY` secret.
 
 ### Layout
 

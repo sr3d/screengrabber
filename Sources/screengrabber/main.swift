@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import Sparkle
 
 private let repoURL = "https://github.com/sr3d/screengrabber"
 
@@ -9,6 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var editors: [EditorWindowController] = []
     private var capturing = false
     private var preferencesController: PreferencesWindowController?
+
+    /// Sparkle auto-updater. `startingUpdater: true` kicks off the background
+    /// check schedule; it reads the feed (SUFeedURL) and verifies downloads with
+    /// the EdDSA public key (SUPublicEDKey), both in Info.plist.
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     /// The system ⇧⌘4 shortcut's enabled-state before we took it over, so we can
     /// hand it back on a clean quit.
     private var systemShortcutWasEnabled = false
@@ -59,6 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let aboutItem = NSMenuItem(title: "About ScreenGrabber", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
+
+        // Sparkle's standard controller handles the action and enables/disables
+        // the item automatically (e.g. while a check is already in progress).
+        let updatesItem = NSMenuItem(title: "Check for Updates…",
+                                     action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                                     keyEquivalent: "")
+        updatesItem.target = updaterController
+        menu.addItem(updatesItem)
 
         let prefsItem = NSMenuItem(title: "Settings…", action: #selector(showPreferences), keyEquivalent: ",")
         prefsItem.keyEquivalentModifierMask = [.command]
@@ -176,7 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPreferences() {
         if preferencesController == nil {
-            preferencesController = PreferencesWindowController()
+            preferencesController = PreferencesWindowController(updater: updaterController.updater)
         }
         NSApp.activate(ignoringOtherApps: true)
         preferencesController?.showWindow(nil)

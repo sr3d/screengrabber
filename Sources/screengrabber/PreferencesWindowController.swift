@@ -1,10 +1,12 @@
 import AppKit
+import Sparkle
 
 /// A small settings window for the save location, filename prefix, and the
 /// auto-save-on-capture toggle. Changes are written to `Preferences` live.
 final class PreferencesWindowController: NSWindowController {
 
     private let prefs = Preferences.shared
+    private let updater: SPUUpdater?
     private let pathLabel = NSTextField(labelWithString: "")
     private let prefixField = NSTextField(string: "")
     private let previewLabel = NSTextField(labelWithString: "")
@@ -13,8 +15,9 @@ final class PreferencesWindowController: NSWindowController {
     private let toolItems: [(title: String, tool: Tool?)] =
         [("Select (no tool)", nil)] + Tool.paletteOrder.map { ($0.displayName, $0) }
 
-    init() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 370),
+    init(updater: SPUUpdater?) {
+        self.updater = updater
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 410),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "ScreenGrabber Settings"
         window.isReleasedWhenClosed = false
@@ -73,6 +76,13 @@ final class PreferencesWindowController: NSWindowController {
                                     target: self, action: #selector(startAtLoginToggled(_:)))
         startAtLogin.state = prefs.launchAtLogin ? .on : .off
 
+        // Updates. Sparkle owns this setting (stored in its own UserDefaults
+        // keys); we just surface its toggle here.
+        let autoUpdate = NSButton(checkboxWithTitle: "Check for updates automatically",
+                                  target: self, action: #selector(autoUpdateToggled(_:)))
+        autoUpdate.state = (updater?.automaticallyChecksForUpdates ?? true) ? .on : .off
+        autoUpdate.isEnabled = (updater != nil)
+
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Save to:"), locationRow],
             [NSTextField(labelWithString: "Filename:"), filenameRow],
@@ -81,6 +91,7 @@ final class PreferencesWindowController: NSWindowController {
             [NSGridCell.emptyContentView, showEditor],
             [NSTextField(labelWithString: "Default tool:"), toolPopup],
             [NSTextField(labelWithString: "Startup:"), startAtLogin],
+            [NSTextField(labelWithString: "Updates:"), autoUpdate],
         ])
         grid.rowSpacing = 16
         grid.columnSpacing = 12
@@ -152,5 +163,9 @@ final class PreferencesWindowController: NSWindowController {
         prefs.launchAtLogin = (sender.state == .on)
         // Reflect the real status in case registration was rejected by the system.
         sender.state = prefs.launchAtLogin ? .on : .off
+    }
+
+    @objc private func autoUpdateToggled(_ sender: NSButton) {
+        updater?.automaticallyChecksForUpdates = (sender.state == .on)
     }
 }

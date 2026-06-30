@@ -27,3 +27,11 @@ jobs:
             --title "ScreenGrabber ${GITHUB_REF_NAME}" \
             --generate-notes \
             dist/ScreenGrabber-*.dmg
+
+      # Sign the .dmg with the EdDSA key and publish the Sparkle appcast (+ the
+      # .dmg) to the gh-pages branch, which is where the in-app updater looks.
+      - name: Update Sparkle appcast
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: ./scripts/update-appcast.sh
