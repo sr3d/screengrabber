@@ -12,12 +12,18 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let autoSaveURL: URL?
     private let onOpenPreferences: (() -> Void)?
 
+    /// On-disk file backing this capture, used by Copy File / Reveal File.
+    /// Starts as the auto-save URL; if auto-save is off, a file is created on
+    /// first use so there's always something to copy or reveal.
+    private var savedFileURL: URL?
+
     /// Called when the window closes, so the app delegate can drop its reference.
     var onClose: (() -> Void)?
 
     init(image: CGImage, autoSaveURL: URL?, onOpenPreferences: (() -> Void)?) {
         self.canvas = CanvasView(image: image)
         self.autoSaveURL = autoSaveURL
+        self.savedFileURL = autoSaveURL
         self.onOpenPreferences = onOpenPreferences
 
         let toolbarHeight: CGFloat = 44
@@ -94,14 +100,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
         let undo = makeButton("Undo", action: #selector(undo(_:)), key: "z")
         let clear = makeButton("Clear", action: #selector(clearAll(_:)), key: "")
-        let save = makeButton("Save…", action: #selector(save(_:)), key: "s")
+        let saveSplit = makeSaveSplitButton()
         let copy = makeButton("Copy", action: #selector(copyToClipboard(_:)), key: "c")
+        let copyFile = makeButton("Copy File", action: #selector(copyFile(_:)), key: "c",
+                                  modifiers: [.command, .shift])
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let bar = NSStackView(views: [tools, sizeLabel, sizePopup, colorWell, widthSlider,
-                                      spacer, undo, clear, save, copy])
+                                      spacer, undo, clear, saveSplit, copy, copyFile])
         bar.orientation = .horizontal
         bar.spacing = 8
         bar.alignment = .centerY
@@ -152,14 +160,43 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         return tools
     }
 
-    private func makeButton(_ title: String, action: Selector, key: String) -> NSButton {
+    private func makeButton(_ title: String, action: Selector, key: String,
+                            modifiers: NSEvent.ModifierFlags = .command) -> NSButton {
         let b = NSButton(title: title, target: self, action: action)
         b.bezelStyle = .rounded
         if !key.isEmpty {
             b.keyEquivalent = key
-            b.keyEquivalentModifierMask = .command
+            b.keyEquivalentModifierMask = modifiers
         }
         return b
+    }
+
+    /// "Save…" with an attached chevron that drops a menu (Reveal File).
+    private func makeSaveSplitButton() -> NSStackView {
+        let save = makeButton("Save…", action: #selector(save(_:)), key: "s")
+
+        let chevron = NSButton(title: "", target: self, action: #selector(showSaveMenu(_:)))
+        chevron.bezelStyle = .rounded
+        chevron.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "More")
+        chevron.imagePosition = .imageOnly
+        chevron.toolTip = "More save options"
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        chevron.widthAnchor.constraint(equalToConstant: 24).isActive = true
+
+        let split = NSStackView(views: [save, chevron])
+        split.orientation = .horizontal
+        split.spacing = 1
+        return split
+    }
+
+    @objc private func showSaveMenu(_ sender: NSButton) {
+        let menu = NSMenu()
+        let reveal = NSMenuItem(title: "Reveal File in Finder",
+                                action: #selector(revealFile(_:)), keyEquivalent: "")
+        reveal.target = self
+        menu.addItem(reveal)
+        menu.popUp(positioning: nil,
+                   at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
     }
 
     // MARK: - Actions
@@ -199,6 +236,32 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         flashTitle("Copied to clipboard ✓")
     }
 
+    /// Puts the current image's file URL on the pasteboard so it can be pasted
+    /// into another folder in Finder (not the pixels — the file itself).
+    @objc private func copyFile(_ sender: Any?) {
+        guard let url = currentFileOnDisk() else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects([url as NSURL])
+        flashTitle("File copied ✓")
+    }
+
+    /// Opens a Finder window with the current image's file selected.
+    @objc private func revealFile(_ sender: Any?) {
+        guard let url = currentFileOnDisk() else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Writes the current composite to disk and returns its URL. Reuses the
+    /// auto-save file when present; otherwise creates one on first use.
+    private func currentFileOnDisk() -> URL? {
+        guard let cg = canvas.compositeImage() else { return nil }
+        let url = savedFileURL ?? Preferences.shared.makeFileURL()
+        guard writePNG(cg, to: url) else { return nil }
+        savedFileURL = url
+        return url
+    }
+
     @objc private func save(_ sender: Any?) {
         guard let cg = canvas.compositeImage(), let window = window else { return }
         let panel = NSSavePanel()
@@ -206,11 +269,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         panel.directoryURL = Preferences.shared.saveDirectory
         panel.nameFieldStringValue = Preferences.shared.previewFilename()
         panel.canCreateDirectories = true
-        panel.beginSheetModal(for: window) { response in
+        panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             let rep = NSBitmapImageRep(cgImage: cg)
             if let data = rep.representation(using: .png, properties: [:]) {
                 try? data.write(to: url)
+                // Point Copy File / Reveal File at where the user just saved.
+                self?.savedFileURL = url
             }
         }
     }

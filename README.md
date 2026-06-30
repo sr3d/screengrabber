@@ -90,6 +90,8 @@ inside? See the [**Developer docs**](docs/README.md).
   - **Double-click** a text box to re-edit it.
   - **Delete/Backspace** removes the selected shape.
 - **Undo** (⌘Z), **Clear**, **Save…** (⌘S, writes PNG), **Copy** (⌘C, to clipboard).
+- **Copy File** (⇧⌘C) — copies the image *file* (not the pixels) so you can ⌘V it into another folder in Finder.
+- The **Save…** chevron drops a **Reveal File in Finder** option (opens a Finder window with the file selected).
 - Paste into Slack with ⌘V.
 
 ### Tool shortcuts
@@ -103,7 +105,7 @@ inside? See the [**Developer docs**](docs/README.md).
 
 The drawing controls are grouped together on the left of the toolbar: the tool
 buttons, the **`Aa` dropdown** (text size), then the color well and stroke-width
-slider. File actions (Undo / Clear / Save / Copy) sit on the right.
+slider. File actions (Undo / Clear / Save / Copy / Copy File) sit on the right.
 
 ## Settings (⌘,)
 
