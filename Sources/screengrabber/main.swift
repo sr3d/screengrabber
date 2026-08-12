@@ -1,11 +1,15 @@
 import AppKit
 import Carbon
+import ImageIO
 import Sparkle
+import UniformTypeIdentifiers
 
 private let repoURL = "https://github.com/sr3d/screengrabber"
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpdaterDelegate {
     private var statusItem: NSStatusItem!
+    private let recentMenu = NSMenu(title: "Recent Screenshots")
+    private var thumbnailCache: [String: NSImage] = [:]
     private let capture = CaptureController()
     private var editors: [EditorWindowController] = []
     private var capturing = false
@@ -13,9 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Sparkle auto-updater. `startingUpdater: true` kicks off the background
     /// check schedule; it reads the feed (SUFeedURL) and verifies downloads with
-    /// the EdDSA public key (SUPublicEDKey), both in Info.plist.
-    private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    /// the EdDSA public key (SUPublicEDKey), both in Info.plist. Lazy so we can
+    /// pass `self` as the delegate (for error diagnostics).
+    private lazy var updaterController = SPUStandardUpdaterController(
+        startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
     /// The system ⇧⌘4 shortcut's enabled-state before we took it over, so we can
     /// hand it back on a clean quit.
     private var systemShortcutWasEnabled = false
@@ -52,15 +57,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.image = AppDelegate.menuBarIcon()
-        }
 
         let menu = NSMenu()
         let capItem = NSMenuItem(title: "Capture Region", action: #selector(captureMenu), keyEquivalent: "4")
         capItem.keyEquivalentModifierMask = [.command, .shift]
         capItem.target = self
         menu.addItem(capItem)
+
+        let openItem = NSMenuItem(title: "Open Image…", action: #selector(openImage), keyEquivalent: "o")
+        openItem.keyEquivalentModifierMask = [.command]
+        openItem.target = self
+        menu.addItem(openItem)
+
+        // Recent screenshots — populated lazily when the submenu opens.
+        recentMenu.delegate = self
+        let recentItem = NSMenuItem(title: "Recent Screenshots", action: nil, keyEquivalent: "")
+        recentItem.submenu = recentMenu
+        menu.addItem(recentItem)
+
         menu.addItem(.separator())
 
         let aboutItem = NSMenuItem(title: "About ScreenGrabber", action: #selector(showAbout), keyEquivalent: "")
@@ -83,7 +97,168 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit ScreenGrabber",
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        statusItem.menu = menu
+
+        // Overlay the button with a drop view so image files dragged onto the
+        // menu-bar icon open in the editor. The overlay also pops `menu` on click
+        // (covering the button suppresses its built-in menu), so we don't set
+        // `statusItem.menu`.
+        if let button = statusItem.button {
+            button.image = AppDelegate.menuBarIcon()
+            let drop = MenuBarDropView(frame: button.bounds)
+            drop.autoresizingMask = [.width, .height]
+            drop.statusItem = statusItem
+            drop.statusMenu = menu
+            drop.onDropImages = { [weak self] urls in self?.openImages(at: urls) }
+            button.addSubview(drop)
+        }
+    }
+
+    /// Picks image files and opens each in an editor. Handy for working on an
+    /// existing image — and for exercising the editor without taking a fresh
+    /// capture, which an ad-hoc-signed rebuild would re-prompt for.
+    @objc private func openImage() {
+        NSApp.activate(ignoringOtherApps: true)
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.directoryURL = Preferences.shared.saveDirectory
+        panel.message = "Choose an image to open in the editor"
+        panel.begin { [weak self] response in
+            guard response == .OK else { return }
+            self?.openImages(at: panel.urls)
+        }
+    }
+
+    /// Opens each dropped image file in its own editor window. No auto-save URL —
+    /// edits won't overwrite the user's original file (use Save… / Copy File).
+    private func openImages(at urls: [URL]) {
+        var opened = 0
+        for url in urls {
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { continue }
+            openEditor(with: cg, autoSaveURL: nil)
+            Preferences.shared.addRecentFile(url)
+            opened += 1
+        }
+        if opened == 0 { Toast.show("Couldn't open that image") }
+    }
+
+    // MARK: - Recent screenshots
+
+    /// Rebuilds the recents submenu just before it opens, so it always reflects
+    /// the latest files (and drops any that were deleted).
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === recentMenu else { return }
+        menu.removeAllItems()
+
+        let urls = Preferences.shared.recentFileURLs()
+        guard !urls.isEmpty else {
+            let empty = NSMenuItem(title: "No recent screenshots", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+            return
+        }
+
+        for url in urls {
+            let item = NSMenuItem(title: url.lastPathComponent,
+                                  action: #selector(openRecent(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = url
+            item.image = thumbnail(for: url)
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let clear = NSMenuItem(title: "Clear Menu", action: #selector(clearRecents), keyEquivalent: "")
+        clear.target = self
+        menu.addItem(clear)
+    }
+
+    @objc private func openRecent(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        openImages(at: [url])
+    }
+
+    @objc private func clearRecents() {
+        Preferences.shared.clearRecentFiles()
+    }
+
+    // MARK: - Update diagnostics (SPUUpdaterDelegate)
+
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        // Returning nil keeps the Info.plist SUFeedURL; we read it here only to
+        // include it in error diagnostics.
+        nil
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        let nsError = error as NSError
+        // A plain user cancel isn't worth reporting.
+        if nsError.domain == NSCocoaErrorDomain && nsError.code == NSUserCancelledError { return }
+
+        let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String ?? "(none)"
+        let detail = "Feed: \(feed)\n\n" + AppDelegate.describe(error)
+        NSLog("ScreenGrabber update error:\n\(detail)")
+
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Couldn't check for updates"
+            alert.informativeText = detail
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "Copy Details")
+            if alert.runModal() == .alertSecondButtonReturn {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(detail, forType: .string)
+            }
+        }
+    }
+
+    /// Flattens an NSError chain (domain, code, message, failing URL, underlying
+    /// errors) into a readable multi-line string for debugging.
+    private static func describe(_ error: Error) -> String {
+        var lines: [String] = []
+        var current: NSError? = error as NSError
+        var depth = 0
+        while let e = current {
+            let indent = String(repeating: "    ", count: depth)
+            lines.append("\(indent)• \(e.domain) (code \(e.code))")
+            lines.append("\(indent)  \(e.localizedDescription)")
+            if let reason = e.userInfo[NSLocalizedFailureReasonErrorKey] as? String {
+                lines.append("\(indent)  reason: \(reason)")
+            }
+            if let url = e.userInfo[NSURLErrorFailingURLStringErrorKey] as? String {
+                lines.append("\(indent)  url: \(url)")
+            }
+            current = e.userInfo[NSUnderlyingErrorKey] as? NSError
+            depth += 1
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// A small thumbnail for a menu row, cached by path + modification time so an
+    /// edited screenshot (re-saved to the same path) refreshes.
+    private func thumbnail(for url: URL) -> NSImage? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let mtime = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let key = "\(url.path)#\(mtime)"
+        if let cached = thumbnailCache[key] { return cached }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 48,
+        ]
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary) else { return nil }
+
+        // Display ~24pt tall (the 48px source stays crisp on Retina).
+        let targetH: CGFloat = 24
+        let s = targetH / CGFloat(cg.height)
+        let img = NSImage(cgImage: cg, size: NSSize(width: CGFloat(cg.width) * s, height: targetH))
+        thumbnailCache[key] = img
+        return img
     }
 
     /// A template menu-bar glyph mirroring the app icon: the selection-region
@@ -155,6 +330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let url = prefs.makeFileURL()
                 writePNG(image, to: url)
                 autoSaveURL = url
+                prefs.addRecentFile(url)
             }
 
             if prefs.showEditorOnCapture {
@@ -168,7 +344,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openEditor(with image: CGImage, autoSaveURL: URL?) {
         let controller = EditorWindowController(image: image, autoSaveURL: autoSaveURL,
-                                                onOpenPreferences: { [weak self] in self?.showPreferences() })
+                                                onOpenPreferences: { [weak self] in self?.showPreferences() },
+                                                onOpenImage: { [weak self] in self?.openImage() })
         controller.onClose = { [weak self, weak controller] in
             self?.editors.removeAll { $0 === controller }
             self?.updateActivationPolicy()

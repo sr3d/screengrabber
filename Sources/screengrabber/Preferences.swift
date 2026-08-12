@@ -15,7 +15,10 @@ final class Preferences {
         static let copyOnCapture = "copyToClipboardOnCapture"
         static let showEditor = "showEditorOnCapture"
         static let defaultTool = "defaultDrawingTool"
+        static let recentFiles = "recentFiles"
     }
+
+    private let maxRecentFiles = 20
 
     private init() {}
 
@@ -46,6 +49,33 @@ final class Preferences {
             return Tool(persistID: raw)   // "select" (or unknown) → nil
         }
         set { defaults.set(newValue?.persistID ?? "select", forKey: Key.defaultTool) }
+    }
+
+    // MARK: - Recent files
+
+    /// Paths of recently captured/saved/opened screenshots, most recent first.
+    private func recentFilePaths() -> [String] {
+        defaults.stringArray(forKey: Key.recentFiles) ?? []
+    }
+
+    /// Recent files that still exist on disk, most recent first.
+    func recentFileURLs() -> [URL] {
+        recentFilePaths()
+            .map { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// Records a file as the most-recent, de-duplicated and capped at 20.
+    func addRecentFile(_ url: URL) {
+        var paths = recentFilePaths()
+        paths.removeAll { $0 == url.path }
+        paths.insert(url.path, at: 0)
+        if paths.count > maxRecentFiles { paths = Array(paths.prefix(maxRecentFiles)) }
+        defaults.set(paths, forKey: Key.recentFiles)
+    }
+
+    func clearRecentFiles() {
+        defaults.removeObject(forKey: Key.recentFiles)
     }
 
     // MARK: - Start at login

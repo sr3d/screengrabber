@@ -23,7 +23,10 @@ cd "$(dirname "$0")/.."
 : "${SPARKLE_ED_PRIVATE_KEY:?need SPARKLE_ED_PRIVATE_KEY}"
 : "${GITHUB_REPOSITORY:?need GITHUB_REPOSITORY}"
 
-PAGES_URL="https://$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1).github.io/$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)/"
+# Public base URL where gh-pages is served. Defaults to the project's custom
+# domain (GitHub Pages redirects sr3d.github.io → alexle.net); override with
+# PAGES_BASE_URL if the domain ever changes. Must match SUFeedURL in Info.plist.
+PAGES_URL="${PAGES_BASE_URL:-https://alexle.net/screengrabber/}"
 REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
 # generate_appcast ships inside Sparkle's SPM binary artifact (downloaded by the

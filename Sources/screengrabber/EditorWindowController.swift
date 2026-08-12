@@ -6,27 +6,37 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     private let canvas: CanvasView
     private let colorWell = NSColorWell()
+    /// The Live Text toggle, kept so the canvas can un-press it when the mode
+    /// ends by some other route (Esc, or picking a tool).
+    private var selectText = NSButton()
 
     /// If set, the composited image is written here when the window closes
     /// (auto-save). The raw capture was already written here at capture time.
     private let autoSaveURL: URL?
     private let onOpenPreferences: (() -> Void)?
+    private let onOpenImage: (() -> Void)?
 
     /// On-disk file backing this capture, used by Copy File / Reveal File.
     /// Starts as the auto-save URL; if auto-save is off, a file is created on
     /// first use so there's always something to copy or reveal.
     private var savedFileURL: URL?
 
+    /// The Extracted Text panel, created on first use and reused after that.
+    private var extractedTextPanel: ExtractedTextWindowController?
+
     /// Called when the window closes, so the app delegate can drop its reference.
     var onClose: (() -> Void)?
 
-    init(image: CGImage, autoSaveURL: URL?, onOpenPreferences: (() -> Void)?) {
+    private let toolbarHeight: CGFloat = 44
+
+    init(image: CGImage, autoSaveURL: URL?, onOpenPreferences: (() -> Void)?,
+         onOpenImage: (() -> Void)? = nil) {
         self.canvas = CanvasView(image: image)
         self.autoSaveURL = autoSaveURL
         self.savedFileURL = autoSaveURL
         self.onOpenPreferences = onOpenPreferences
+        self.onOpenImage = onOpenImage
 
-        let toolbarHeight: CGFloat = 44
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let maxW = screen.width * 0.9
         let maxH = screen.height * 0.9 - toolbarHeight
@@ -47,6 +57,25 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         buildContent(toolbarHeight: toolbarHeight)
     }
 
+    /// Resizes the window to fit a new base-image size (after a crop or its undo),
+    /// keeping the top-left corner anchored.
+    private func resizeToFit(imageSize: CGSize) {
+        guard let window = window, imageSize.width > 0, imageSize.height > 0 else { return }
+        let screen = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let maxW = screen.width * 0.9
+        let maxH = screen.height * 0.9 - toolbarHeight
+        let fit = min(1, min(maxW / imageSize.width, maxH / imageSize.height))
+        let contentW = max(820, imageSize.width * fit)
+        let contentH = imageSize.height * fit + toolbarHeight
+
+        let old = window.frame
+        var frame = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: contentW, height: contentH))
+        frame.origin.x = old.minX
+        frame.origin.y = old.maxY - frame.height   // keep the top edge fixed
+        window.setFrame(frame, display: true, animate: true)
+    }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     // MARK: - Layout
@@ -64,6 +93,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         // Keyboard tool shortcuts keep the toolbar highlight in sync.
         canvas.onToolPicked = { [weak tools] segment in tools?.selectedSegment = segment }
         canvas.onOpenPreferences = onOpenPreferences
+        canvas.onOpenImage = onOpenImage
+        // A crop (or undoing one) changes the image size; refit the window.
+        canvas.onImageSizeChanged = { [weak self] size in self?.resizeToFit(imageSize: size) }
+        canvas.onTextSelectModeChanged = { [weak self] on in
+            self?.selectText.state = on ? .on : .off
+        }
 
         // Start on the user's default tool (nil = Select mode, no drawing).
         if let tool = Preferences.shared.defaultTool {
@@ -98,6 +133,42 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         sizePopup.translatesAutoresizingMaskIntoConstraints = false
         sizePopup.widthAnchor.constraint(equalToConstant: 64).isActive = true
 
+        let crop = makeButton("Crop", action: #selector(cropImage(_:)), key: "")
+        if let cropImg = NSImage(systemSymbolName: "crop", accessibilityDescription: "Crop") {
+            crop.image = cropImg
+            crop.imagePosition = .imageOnly   // icon-only keeps the toolbar compact
+        }
+        crop.toolTip = "Crop: drag a region, Return to apply, Esc to cancel"
+
+        // Labelled rather than icon-only (unlike Crop): "OCR" isn't something you
+        // guess from a glyph, and it's the one toolbar action whose result opens
+        // a separate window.
+        let extractText = makeButton("OCR", action: #selector(extractText(_:)),
+                                     key: "t", modifiers: [.command, .shift])
+        if let ocrImg = NSImage(systemSymbolName: "text.viewfinder",
+                                accessibilityDescription: "OCR") {
+            extractText.image = ocrImg
+            extractText.imagePosition = .imageLeading
+        }
+        extractText.toolTip = "OCR: extract the text from this image into a selectable panel (⇧⌘T)"
+
+        selectText = makeButton("Select Text", action: #selector(toggleSelectText(_:)),
+                                key: "l", modifiers: [.command, .shift])
+        selectText.setButtonType(.pushOnPushOff)
+        if let img = NSImage(systemSymbolName: "character.cursor.ibeam",
+                             accessibilityDescription: "Select Text") {
+            selectText.image = img
+            selectText.imagePosition = .imageLeading
+        }
+        if LiveTextOverlay.isSupported {
+            selectText.toolTip = "Select Text: drag to select text on the image itself (⇧⌘L). "
+                + "In Select mode this also happens automatically when you hover over text."
+        } else {
+            // Live Text needs Apple silicon; the OCR panel still works everywhere.
+            selectText.isEnabled = false
+            selectText.toolTip = "Select Text needs an Apple silicon Mac. Use OCR (⇧⌘T) instead."
+        }
+
         let undo = makeButton("Undo", action: #selector(undo(_:)), key: "z")
         let clear = makeButton("Clear", action: #selector(clearAll(_:)), key: "")
         let saveSplit = makeSaveSplitButton()
@@ -108,8 +179,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let bar = NSStackView(views: [tools, sizeLabel, sizePopup, colorWell, widthSlider,
-                                      spacer, undo, clear, saveSplit, copy, copyFile])
+        let bar = NSStackView(views: [tools, crop, extractText, selectText, sizeLabel, sizePopup,
+                                      colorWell, widthSlider, spacer, undo, clear, saveSplit,
+                                      copy, copyFile])
         bar.orientation = .horizontal
         bar.spacing = 8
         bar.alignment = .centerY
@@ -202,6 +274,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Actions
 
     @objc private func toolChanged(_ sender: NSSegmentedControl) {
+        // Picking a tool leaves crop / text-select. Previously crop mode survived
+        // this and stayed stuck on; with a Live Text overlay it would also keep
+        // swallowing the clicks the tool needs.
+        canvas.cancelTransientModes()
         // Segment 0 is Select mode; the rest map to Tool.paletteOrder (offset by one).
         if sender.selectedSegment == 0 {
             canvas.selectMode = true
@@ -229,8 +305,35 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     @objc private func undo(_ sender: Any?) { canvas.undo() }
     @objc private func clearAll(_ sender: Any?) { canvas.clearAll() }
+    @objc private func cropImage(_ sender: Any?) { canvas.enterCropMode() }
 
+    /// OCRs the image and opens the Extracted Text panel. Recognition runs on the
+    /// *composite*, so it follows any crop and — deliberately — cannot resurrect
+    /// text the user blurred or boxed out.
+    @objc private func extractText(_ sender: Any?) {
+        guard let cg = canvas.compositeImage(), let window = window else { return }
+        let panel = extractedTextPanel ?? ExtractedTextWindowController()
+        extractedTextPanel = panel
+        panel.show(text: cg, relativeTo: window)
+    }
+
+    @objc private func toggleSelectText(_ sender: Any?) {
+        canvas.toggleTextSelectMode()
+        selectText.state = canvas.textSelectMode ? .on : .off
+    }
+
+    /// ⌘C copies the image — unless text is selected on the image itself, in which
+    /// case it copies that. A button's key equivalent is offered before the
+    /// responder chain, so without this the toolbar's Copy would always win over
+    /// the Live Text overlay's own ⌘C.
     @objc private func copyToClipboard(_ sender: Any?) {
+        if let text = canvas.selectedImageText {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(text, forType: .string)
+            flashTitle("Text copied ✓")
+            return
+        }
         guard let cg = canvas.compositeImage() else { return }
         copyImageToClipboard(cg)
         flashTitle("Copied to clipboard ✓")
@@ -259,6 +362,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let url = savedFileURL ?? Preferences.shared.makeFileURL()
         guard writePNG(cg, to: url) else { return nil }
         savedFileURL = url
+        Preferences.shared.addRecentFile(url)
         return url
     }
 
@@ -276,6 +380,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
                 try? data.write(to: url)
                 // Point Copy File / Reveal File at where the user just saved.
                 self?.savedFileURL = url
+                Preferences.shared.addRecentFile(url)
             }
         }
     }
@@ -292,9 +397,14 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        // The text panel belongs to this editor; don't let it outlive the window.
+        extractedTextPanel?.close()
+        extractedTextPanel = nil
+
         // Update the auto-saved file with the final annotated image.
         if let url = autoSaveURL, let cg = canvas.compositeImage() {
             writePNG(cg, to: url)
+            Preferences.shared.addRecentFile(url)
         }
         onClose?()
     }

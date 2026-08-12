@@ -19,6 +19,8 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Carbon"),
+                .linkedFramework("Vision"),
+                .linkedFramework("VisionKit"),
                 .linkedFramework("UniformTypeIdentifiers"),
                 .linkedFramework("ServiceManagement"),
                 // `swift build` doesn't assemble an .app bundle, so point the

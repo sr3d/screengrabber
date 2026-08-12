@@ -77,6 +77,11 @@ inside? See the [**Developer docs**](docs/README.md).
 ## Use
 
 - Press **⇧⌘4** (or menu-bar icon ▸ *Capture Region*) and drag a region.
+- Already have an image? Menu-bar icon ▸ **Open Image…** (⌘O in the editor) opens
+  one — or several — straight into the editor, no capture needed. You can also
+  drag image files onto the menu-bar icon.
+- Or **drag an image file onto the menu-bar icon** to open it in the editor.
+- The menu-bar icon ▸ **Recent Screenshots** lists your last 20 captures with thumbnails — click one to reopen it.
 - The editor opens. Pick a tool, color, and stroke width in the toolbar:
   - **Arrow / Line / Rect / Circle** — annotate
   - **Blur** — pixelate a region (obscure tokens, emails, faces)
@@ -89,6 +94,22 @@ inside? See the [**Developer docs**](docs/README.md).
   - Change the color or stroke width while a shape is selected to restyle it.
   - **Double-click** a text box to re-edit it.
   - **Delete/Backspace** removes the selected shape.
+- **Crop** — click **Crop**, drag the region to keep, then **Return** to apply or **Esc** to cancel. Undoable with ⌘Z.
+- **Select text on the image**, like Preview — in Select mode (`1`), hover over
+  text in the screenshot and the pointer becomes an I-beam; drag to select, ⌘C to
+  copy, right-click for Copy / Look Up. Everywhere else the drawing and selection
+  tools behave exactly as before, and a shape drawn over text still takes the
+  click. **Select Text** (⇧⌘L) forces the mode on for the whole image; **Esc**
+  leaves it. Needs an Apple silicon Mac — on Intel the button is disabled and OCR
+  below does the job.
+- **OCR** (⇧⌘T) — click the **OCR** button to read the text out of the screenshot.
+  It opens an **Extracted Text** panel you can select and copy from, or grab all
+  at once with **Copy All**. Press **⌘F** to search it (⌘G / ⇧⌘G for next and
+  previous match). The text is **editable**, so you can fix anything OCR got wrong
+  (or trim it down) before copying — Copy All takes your edits.
+  Recognition is on-device (Apple's Vision framework) —
+  nothing is uploaded. It runs on what's currently visible, so it follows a crop
+  and won't bring back text you blurred or boxed out.
 - **Undo** (⌘Z), **Clear**, **Save…** (⌘S, writes PNG), **Copy** (⌘C, to clipboard).
 - **Copy File** (⇧⌘C) — copies the image *file* (not the pixels) so you can ⌘V it into another folder in Finder.
 - The **Save…** chevron drops a **Reveal File in Finder** option (opens a Finder window with the file selected).
@@ -104,8 +125,9 @@ inside? See the [**Developer docs**](docs/README.md).
 | `4` | Rectangle | | `T` | Text |
 
 The drawing controls are grouped together on the left of the toolbar: the tool
-buttons, the **`Aa` dropdown** (text size), then the color well and stroke-width
-slider. File actions (Undo / Clear / Save / Copy / Copy File) sit on the right.
+buttons, the **Crop**, **OCR** and **Select Text** buttons, the **`Aa` dropdown**
+(text size), then the color well and stroke-width slider. File actions (Undo /
+Clear / Save / Copy / Copy File) sit on the right.
 
 ## Settings (⌘,)
 
@@ -163,6 +185,11 @@ full Xcode install):
 ARCHS="arm64 x86_64" ./build.sh
 ```
 
+An ad-hoc signature isn't stable across rebuilds, so macOS treats each build as a
+new app and re-prompts for Screen Recording. To exercise the editor without
+granting it again every time, skip the capture entirely: menu-bar icon ▸
+**Open Image…** (or ⌘O in the editor) loads any image straight into the editor.
+
 ### Packaging a `.dmg`
 
 ```bash
@@ -210,7 +237,7 @@ public key lives in `Info.plist` (`SUPublicEDKey`); the private key signs each
 release in CI.
 
 The appcast and the `.dmg` files are published to the **`gh-pages`** branch
-(served at `https://sr3d.github.io/screengrabber/appcast.xml`) by
+(served at `https://alexle.net/screengrabber/appcast.xml`) by
 [`scripts/update-appcast.sh`](scripts/update-appcast.sh), which signs the new
 `.dmg` and regenerates `appcast.xml` from every `.dmg` on that branch.
 
@@ -235,6 +262,9 @@ replace the `SPARKLE_ED_PRIVATE_KEY` secret.
 | `CaptureController.swift` | Runs `screencapture -i`, returns a CGImage |
 | `CanvasView.swift` | Drawing surface, annotation model, selection/handles, tool shortcuts, export — see the [deep dive](docs/canvas-editor.md) |
 | `EditorWindowController.swift` | Toolbar + canvas window, text size, Save/Copy |
+| `TextRecognizer.swift` | On-device OCR (Vision), sorted into reading order |
+| `LiveTextOverlay.swift` | Preview-style text selection on the image (VisionKit) |
+| `ExtractedTextWindowController.swift` | The Extracted Text panel behind the OCR button (⇧⌘T) |
 | `Preferences.swift` | Settings (UserDefaults) + PNG writing |
 | `PreferencesWindowController.swift` | Settings window |
 | `Icon/generate-icon.swift` | Programmatic app-icon generator |

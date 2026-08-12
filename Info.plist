@@ -31,7 +31,7 @@
          below (the matching private key lives only in the SPARKLE_ED_PRIVATE_KEY
          GitHub Actions secret and your local Keychain). -->
     <key>SUFeedURL</key>
-    <string>https://sr3d.github.io/screengrabber/appcast.xml</string>
+    <string>https://alexle.net/screengrabber/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>HIFetPDyPgY4zMZs3pNCpBpS9fhOa0jGjZl8xtdeHyo=</string>
 </dict>
