@@ -173,15 +173,14 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let clear = makeButton("Clear", action: #selector(clearAll(_:)), key: "")
         let saveSplit = makeSaveSplitButton()
         let copy = makeButton("Copy", action: #selector(copyToClipboard(_:)), key: "c")
-        let copyFile = makeButton("Copy File", action: #selector(copyFile(_:)), key: "c",
-                                  modifiers: [.command, .shift])
+        let copyFileSplit = makeCopyFileSplitButton()
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let bar = NSStackView(views: [tools, crop, extractText, selectText, sizeLabel, sizePopup,
                                       colorWell, widthSlider, spacer, undo, clear, saveSplit,
-                                      copy, copyFile])
+                                      copy, copyFileSplit])
         bar.orientation = .horizontal
         bar.spacing = 8
         bar.alignment = .centerY
@@ -246,16 +245,30 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     /// "Save…" with an attached chevron that drops a menu (Reveal File).
     private func makeSaveSplitButton() -> NSStackView {
         let save = makeButton("Save…", action: #selector(save(_:)), key: "s")
+        return makeSplitButton(save, menuAction: #selector(showSaveMenu(_:)),
+                               toolTip: "More save options")
+    }
 
-        let chevron = NSButton(title: "", target: self, action: #selector(showSaveMenu(_:)))
+    /// "Copy File" with an attached chevron that drops a menu (Copy File Path).
+    private func makeCopyFileSplitButton() -> NSStackView {
+        let copyFile = makeButton("Copy File", action: #selector(copyFile(_:)), key: "c",
+                                  modifiers: [.command, .shift])
+        return makeSplitButton(copyFile, menuAction: #selector(showCopyFileMenu(_:)),
+                               toolTip: "More copy options")
+    }
+
+    /// Pairs a button with a chevron that pops up a menu via `menuAction`.
+    private func makeSplitButton(_ main: NSButton, menuAction: Selector,
+                                 toolTip: String) -> NSStackView {
+        let chevron = NSButton(title: "", target: self, action: menuAction)
         chevron.bezelStyle = .rounded
         chevron.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "More")
         chevron.imagePosition = .imageOnly
-        chevron.toolTip = "More save options"
+        chevron.toolTip = toolTip
         chevron.translatesAutoresizingMaskIntoConstraints = false
         chevron.widthAnchor.constraint(equalToConstant: 24).isActive = true
 
-        let split = NSStackView(views: [save, chevron])
+        let split = NSStackView(views: [main, chevron])
         split.orientation = .horizontal
         split.spacing = 1
         return split
@@ -267,6 +280,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
                                 action: #selector(revealFile(_:)), keyEquivalent: "")
         reveal.target = self
         menu.addItem(reveal)
+        menu.popUp(positioning: nil,
+                   at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    }
+
+    @objc private func showCopyFileMenu(_ sender: NSButton) {
+        let menu = NSMenu()
+        let copyPath = NSMenuItem(title: "Copy File Path",
+                                  action: #selector(copyFilePath(_:)), keyEquivalent: "")
+        copyPath.target = self
+        menu.addItem(copyPath)
         menu.popUp(positioning: nil,
                    at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
     }
@@ -347,6 +370,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         pb.clearContents()
         pb.writeObjects([url as NSURL])
         flashTitle("File copied ✓")
+    }
+
+    /// Puts the current image's absolute path on the pasteboard as plain text,
+    /// e.g. to paste into a terminal or Claude Code.
+    @objc private func copyFilePath(_ sender: Any?) {
+        guard let url = currentFileOnDisk() else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(url.path, forType: .string)
+        flashTitle("Path copied ✓")
     }
 
     /// Opens a Finder window with the current image's file selected.

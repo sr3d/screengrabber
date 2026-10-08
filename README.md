@@ -111,7 +111,7 @@ inside? See the [**Developer docs**](docs/README.md).
   nothing is uploaded. It runs on what's currently visible, so it follows a crop
   and won't bring back text you blurred or boxed out.
 - **Undo** (⌘Z), **Clear**, **Save…** (⌘S, writes PNG), **Copy** (⌘C, to clipboard).
-- **Copy File** (⇧⌘C) — copies the image *file* (not the pixels) so you can ⌘V it into another folder in Finder.
+- **Copy File** (⇧⌘C) — copies the image *file* (not the pixels) so you can ⌘V it into another folder in Finder. Its chevron drops a **Copy File Path** option that copies the file's absolute path as text (handy for pasting into a terminal or Claude Code).
 - The **Save…** chevron drops a **Reveal File in Finder** option (opens a Finder window with the file selected).
 - Paste into Slack with ⌘V.
 
