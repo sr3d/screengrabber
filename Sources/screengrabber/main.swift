@@ -45,6 +45,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpd
                                      modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
             self?.beginCapture()
         }
+
+        // ⇧⌘2 — Capture Text. Not a system shortcut, so nothing to take over.
+        HotKeyCenter.shared.register(keyCode: UInt32(kVK_ANSI_2),
+                                     modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
+            self?.beginTextCapture()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -55,6 +61,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpd
         }
     }
 
+    /// "Version 1.0.1 (2) · Built Oct 8, 2026 at 2:32 PM". The build date comes
+    /// from the executable's modification time, so local rebuilds — which don't
+    /// bump the version — are distinguishable too.
+    private static func versionString() -> String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        var title = "Version \(version) (\(build))"
+        if let exe = Bundle.main.executableURL,
+           let date = (try? exe.resourceValues(forKeys: [.contentModificationDateKey]))?
+               .contentModificationDate {
+            let f = DateFormatter()
+            f.dateStyle = .medium
+            f.timeStyle = .short
+            title += " · Built \(f.string(from: date))"
+        }
+        return title
+    }
+
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
@@ -63,6 +88,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpd
         capItem.keyEquivalentModifierMask = [.command, .shift]
         capItem.target = self
         menu.addItem(capItem)
+
+        let textItem = NSMenuItem(title: "Capture Text", action: #selector(captureTextMenu), keyEquivalent: "2")
+        textItem.keyEquivalentModifierMask = [.command, .shift]
+        textItem.target = self
+        menu.addItem(textItem)
 
         let openItem = NSMenuItem(title: "Open Image…", action: #selector(openImage), keyEquivalent: "o")
         openItem.keyEquivalentModifierMask = [.command]
@@ -76,6 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpd
         menu.addItem(recentItem)
 
         menu.addItem(.separator())
+
+        // Disabled, informational: shows at a glance whether an update landed.
+        let versionItem = NSMenuItem(title: Self.versionString(), action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
 
         let aboutItem = NSMenuItem(title: "About ScreenGrabber", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
@@ -340,6 +375,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SPUUpd
                 Toast.show("Screenshot saved")
             }
         }
+    }
+
+    @objc private func captureTextMenu() { beginTextCapture() }
+
+    /// Select a region and copy the text in it — no editor, no file. The
+    /// capture's temporary PNG is already deleted by `CaptureController`.
+    private func beginTextCapture() {
+        guard !capturing else { return }
+        capturing = true
+        capture.beginCapture { [weak self] image in
+            guard let self = self else { return }
+            self.capturing = false
+            guard let image = image else { return }
+            TextRecognizer.recognize(in: image) { text in
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    Toast.show("No text found")
+                    return
+                }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(trimmed, forType: .string)
+                Toast.show("Copied: " + AppDelegate.preview(of: trimmed))
+            }
+        }
+    }
+
+    /// The first line of `text`, shortened to fit a toast.
+    private static func preview(of text: String) -> String {
+        let first = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
+        let limit = 48
+        let lines = text.split(whereSeparator: \.isNewline).count
+        var out = first.count > limit ? String(first.prefix(limit)) + "…" : first
+        if lines > 1 { out += "  (+\(lines - 1) more line\(lines == 2 ? "" : "s"))" }
+        return out
     }
 
     private func openEditor(with image: CGImage, autoSaveURL: URL?) {
