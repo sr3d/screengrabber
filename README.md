@@ -77,6 +77,8 @@ inside? See the [**Developer docs**](docs/README.md).
 ## Use
 
 - Press **⇧⌘4** (or menu-bar icon ▸ *Capture Region*) and drag a region.
+- Press **⇧⌘2** (or menu-bar icon ▸ *Capture Text*) and drag over any text on
+  screen to copy it to the clipboard — no screenshot, no editor. OCR runs on-device.
 - Already have an image? Menu-bar icon ▸ **Open Image…** (⌘O in the editor) opens
   one — or several — straight into the editor, no capture needed. You can also
   drag image files onto the menu-bar icon.
