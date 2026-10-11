@@ -18,3 +18,20 @@ Run before each release. Each feature adds its steps here.
 8. Multi-column text (a two-column page) or a non-English language (e.g. a Japanese
    or French web page) comes out in sensible order and language.
 9. **⇧⌘4** still captures a screenshot and opens the editor as before.
+
+## Autostamp (9)
+
+1. Open the editor and press **9** (or click the circled-1 tool). Click three spots.
+   Stamps **1**, **2**, **3** appear in the current color, and the tool stays on
+   Autostamp (it doesn't jump to Select).
+2. Hold the mouse button on a new click and drag. The stamp follows until release.
+3. Change the color and the `Aa` size between clicks. Only the next stamp picks up
+   the change; earlier stamps keep theirs.
+4. Pick a white or yellow color. The number turns black so it stays readable.
+5. Press **1** (Select), click stamp **2**, press **Delete**. Stamp 3 renumbers to
+   **2**. **⌘Z** brings the deleted one back and the numbers return to 1, 2, 3.
+6. In Select mode, drag a stamp to move it; change its color or `Aa` size while
+   selected and it updates. It shows a dashed box but no resize handles.
+7. Stamp past **9**. Two-digit numbers stay inside the circle.
+8. Crop the image. Stamps stay on the same spot of the picture.
+9. **Copy** / **Save…** — the exported PNG shows the stamps crisply at full size.

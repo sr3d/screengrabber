@@ -9,13 +9,14 @@ enum Tool: Int {
     case box
     case text
     case line        // appended (rawValue 6); display order lives in `paletteOrder`
+    case step        // appended (rawValue 7): auto-numbered "Autostamp" markers
 }
 
 extension Tool {
     /// The order tools appear in the toolbar and under the number-key shortcuts
     /// (segment 0 / key "1" is Select, handled separately). This is decoupled
     /// from `rawValue` so tools can be reordered without breaking storage.
-    static let paletteOrder: [Tool] = [.arrow, .line, .rectangle, .ellipse, .blur, .box, .text]
+    static let paletteOrder: [Tool] = [.arrow, .line, .rectangle, .ellipse, .blur, .box, .text, .step]
 
     /// SF Symbol name for the toolbar.
     var symbolName: String {
@@ -27,6 +28,7 @@ extension Tool {
         case .blur: return "square.grid.3x3.fill"
         case .box: return "rectangle.fill"
         case .text: return "character"
+        case .step: return "1.circle"
         }
     }
 
@@ -40,6 +42,7 @@ extension Tool {
         case .blur: return "Blur"
         case .box: return "Box"
         case .text: return "Text"
+        case .step: return "Autostamp"
         }
     }
 
@@ -53,11 +56,12 @@ extension Tool {
         case .blur: return "blur"
         case .box: return "box"
         case .text: return "text"
+        case .step: return "step"
         }
     }
 
     init?(persistID: String) {
-        guard let match = ([.arrow, .line, .rectangle, .ellipse, .blur, .box, .text] as [Tool])
+        guard let match = ([.arrow, .line, .rectangle, .ellipse, .blur, .box, .text, .step] as [Tool])
             .first(where: { $0.persistID == persistID }) else { return nil }
         self = match
     }
@@ -73,7 +77,7 @@ struct Annotation {
     var color: NSColor
     var lineWidth: CGFloat
     var text: String = ""        // used by the .text tool only
-    var fontSize: CGFloat = 28   // used by the .text tool only
+    var fontSize: CGFloat = 28   // .text and .step (a stamp's number size)
 }
 
 /// The drawing surface. It letterboxes the captured image to fit, maps mouse
@@ -283,6 +287,21 @@ final class CanvasView: NSView {
             selectedIndex = idx
             editingTextIndex = idx
             activeDrag = .none
+        } else if currentTool == .step {
+            // Stamp the next step number at the click. The number isn't stored —
+            // it's the stamp's position among all stamps, so deleting or undoing
+            // one renumbers the rest. Dragging before release repositions it, and
+            // the tool stays active so the next click stamps the next number.
+            pushUndo()
+            var a = Annotation(tool: .step, start: p, end: p,
+                               color: currentColor, lineWidth: currentLineWidth)
+            a.fontSize = currentFontSize
+            annotations.append(a)
+            selectedIndex = annotations.count - 1
+            moveFrom = p
+            moveOrigStart = p
+            moveOrigEnd = p
+            activeDrag = .moving
         } else {
             draft = Annotation(tool: currentTool, start: p, end: p,
                                color: currentColor, lineWidth: currentLineWidth)
@@ -332,6 +351,9 @@ final class CanvasView: NSView {
                 didDraw = true
             }
         }
+        // A stamp just placed stays unselected, so toolbar tweaks made between
+        // stamps (color, size) apply to the next one rather than the last.
+        if !selectMode, currentTool == .step, case .moving = activeDrag { selectedIndex = nil }
         draft = nil
         activeDrag = .none
         needsDisplay = true
@@ -443,7 +465,8 @@ final class CanvasView: NSView {
     }
 
     /// Plain-key tool shortcuts: "1" Select; "2"… follow `Tool.paletteOrder`
-    /// (2 Arrow, 3 Line, 4 Rectangle, 5 Circle, 6 Blur, 7 Box); "T" Text.
+    /// (2 Arrow, 3 Line, 4 Rectangle, 5 Circle, 6 Blur, 7 Box, 8 Text, 9 Autostamp);
+    /// "T" also picks Text.
     private func handleToolShortcut(_ event: NSEvent) -> Bool {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
               let ch = event.charactersIgnoringModifiers?.lowercased() else { return false }
@@ -541,7 +564,7 @@ final class CanvasView: NSView {
     }
 
     func setSelectedFontSize(_ size: CGFloat) {
-        guard let i = selectedIndex, annotations[i].tool == .text else { return }
+        guard let i = selectedIndex, [.text, .step].contains(annotations[i].tool) else { return }
         annotations[i].fontSize = size
         needsDisplay = true
     }
@@ -724,6 +747,8 @@ final class CanvasView: NSView {
                 if distanceToSegment(p, a.start, a.end) <= max(a.lineWidth, 8 / scale) { return i }
             case .text:
                 if textRect(for: a).insetBy(dx: -6 / scale, dy: -6 / scale).contains(p) { return i }
+            case .step:
+                if hypot(p.x - a.start.x, p.y - a.start.y) <= stepRadius(for: a) + 4 / scale { return i }
             default:
                 if rect(for: a).insetBy(dx: -6 / scale, dy: -6 / scale).contains(p) { return i }
             }
@@ -742,8 +767,8 @@ final class CanvasView: NSView {
 
     private func handles(for a: Annotation) -> [(HandleRef, CGPoint)] {
         switch a.tool {
-        case .text:
-            return []  // text is move-only
+        case .text, .step:
+            return []  // text and stamps are move-only (size comes from the Aa popup)
         case .arrow, .line:
             return [(.arrowStart, a.start), (.arrowEnd, a.end)]
         default:
@@ -847,7 +872,7 @@ final class CanvasView: NSView {
         ctx.saveGState()
         ctx.translateBy(x: r.minX, y: r.minY)
         ctx.scaleBy(x: scale, y: scale)
-        for a in annotations { render(a, into: ctx) }
+        for (i, a) in annotations.enumerated() { render(a, at: i, into: ctx) }
         if let d = draft { render(d, into: ctx) }
         if let ei = editingTextIndex, ei < annotations.count {
             drawCaret(annotations[ei], into: ctx)
@@ -908,7 +933,12 @@ final class CanvasView: NSView {
         let accent = NSColor.controlAccentColor
 
         if a.tool != .arrow && a.tool != .line {
-            let r = (a.tool == .text) ? textRect(for: a) : rect(for: a)
+            let r: CGRect
+            switch a.tool {
+            case .text: r = textRect(for: a)
+            case .step: r = stepRect(for: a)
+            default:    r = rect(for: a)
+            }
             let p0 = imageToView(CGPoint(x: r.minX, y: r.minY))
             let p1 = imageToView(CGPoint(x: r.maxX, y: r.maxY))
             let vr = CGRect(x: p0.x, y: p0.y, width: p1.x - p0.x, height: p1.y - p0.y)
@@ -954,7 +984,9 @@ final class CanvasView: NSView {
                height: abs(a.end.y - a.start.y))
     }
 
-    private func render(_ a: Annotation, into ctx: CGContext) {
+    /// `index` is the annotation's position in `annotations` (nil for a draft);
+    /// stamps use it to work out their number.
+    private func render(_ a: Annotation, at index: Int? = nil, into ctx: CGContext) {
         ctx.saveGState()
         switch a.tool {
         case .rectangle:
@@ -981,8 +1013,58 @@ final class CanvasView: NSView {
             pixelate(rect(for: a), into: ctx)
         case .text:
             drawText(a, into: ctx)
+        case .step:
+            drawStep(a, number: stepNumber(at: index ?? annotations.count), into: ctx)
         }
         ctx.restoreGState()
+    }
+
+    // MARK: - Autostamp
+
+    /// The 1-based number of the stamp at `index`: how many stamps come before
+    /// it in drawing order, plus one.
+    private func stepNumber(at index: Int) -> Int {
+        annotations[..<min(index, annotations.count)].filter { $0.tool == .step }.count + 1
+    }
+
+    /// Circle radius in image px. Scales with the Aa text size so stamps match
+    /// nearby labels.
+    private func stepRadius(for a: Annotation) -> CGFloat {
+        fontSize(for: a) * 0.8
+    }
+
+    private func stepRect(for a: Annotation) -> CGRect {
+        let r = stepRadius(for: a)
+        return CGRect(x: a.start.x - r, y: a.start.y - r, width: r * 2, height: r * 2)
+    }
+
+    /// A filled circle in the stamp's color with its number centered in white
+    /// (black on very light fills), plus a thin white rim so it reads on any
+    /// background.
+    private func drawStep(_ a: Annotation, number: Int, into ctx: CGContext) {
+        let circle = stepRect(for: a)
+        ctx.setFillColor(a.color.cgColor)
+        ctx.fillEllipse(in: circle)
+        ctx.setStrokeColor(NSColor.white.cgColor)
+        ctx.setLineWidth(max(1.5, stepRadius(for: a) * 0.1))
+        ctx.strokeEllipse(in: circle)
+
+        let lum = a.color.usingColorSpace(.sRGB).map {
+            0.299 * $0.redComponent + 0.587 * $0.greenComponent + 0.114 * $0.blueComponent
+        } ?? 0
+        let ink: NSColor = lum > 0.7 ? .black : .white
+        let digits = String(number)
+        // Shrink the type for 2+ digits so the number stays inside the circle.
+        let size = fontSize(for: a) * (digits.count > 1 ? 0.8 : 1.0)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: size, weight: .bold),
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): ink.cgColor,
+        ]
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: digits, attributes: attrs))
+        let bounds = CTLineGetImageBounds(line, ctx)
+        ctx.textMatrix = .identity
+        ctx.textPosition = CGPoint(x: a.start.x - bounds.midX, y: a.start.y - bounds.midY)
+        CTLineDraw(line, ctx)
     }
 
     private func drawText(_ a: Annotation, into ctx: CGContext) {
@@ -1066,7 +1148,7 @@ final class CanvasView: NSView {
                                   bitsPerComponent: 8, bytesPerRow: 0, space: cs,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        for a in annotations { render(a, into: ctx) }
+        for (i, a) in annotations.enumerated() { render(a, at: i, into: ctx) }
         return ctx.makeImage()
     }
 }

@@ -89,7 +89,11 @@ inside? See the [**Developer docs**](docs/README.md).
   - **Blur** — pixelate a region (obscure tokens, emails, faces)
   - **Box** — solid black redaction bar
   - **Text** — click a point and type; **Return** adds a new line, **Esc** or **⌘Return** finishes
-- After you draw a shape, the editor drops into **Select** mode automatically so you can adjust it right away.
+  - **Autostamp** — each click drops the next numbered step marker (1, 2, 3…) in the
+    current color, sized by the `Aa` dropdown. The tool stays active so you can stamp
+    a whole sequence; drag while placing to fine-tune the spot. Numbers follow
+    stamping order and renumber themselves when a stamp is deleted or undone.
+- After you draw a shape, the editor drops into **Select** mode automatically so you can adjust it right away (Autostamp is the exception — it keeps stamping).
 - **Select** mode — adjust existing shapes:
   - Click a shape to select it; drag its **body to move**, drag a **handle to resize**
     (arrows have two endpoint handles; boxes/circles have eight edge & corner handles).
@@ -124,11 +128,12 @@ inside? See the [**Developer docs**](docs/README.md).
 | `1` | Select | | `5` | Circle |
 | `2` | Arrow | | `6` | Blur |
 | `3` | Line | | `7` | Box |
-| `4` | Rectangle | | `T` | Text |
+| `4` | Rectangle | | `T` / `8` | Text |
+| | | | `9` | Autostamp |
 
 The drawing controls are grouped together on the left of the toolbar: the tool
 buttons, the **Crop**, **OCR** and **Select Text** buttons, the **`Aa` dropdown**
-(text size), then the color well and stroke-width slider. File actions (Undo /
+(text and stamp size), then the color well and stroke-width slider. File actions (Undo /
 Clear / Save / Copy / Copy File) sit on the right.
 
 ## Settings (⌘,)
